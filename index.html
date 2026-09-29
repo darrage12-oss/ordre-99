@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#1a5276" />
+  <title>Ordre de Mission – SRM TTA</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="assets/logo.png" />
+  <!-- Local FontAwesome -->
+  <link rel="stylesheet" href="css/font-awesome.min.css" />
+  <!-- App Stylesheet -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<!-- =====================================================================
+     APP SHELL
+     ===================================================================== -->
+<div id="app-shell">
+
+  <!-- ---- SIDEBAR ---- -->
+  <aside id="sidebar">
+    <div class="sidebar-brand">
+      <img src="assets/logo.png" alt="SRM TTA Logo" id="sidebar-logo" />
+      <div class="brand-text">
+        <div class="brand-name">SRM TTA</div>
+        <div class="brand-sub">Ordres de Mission</div>
+      </div>
+    </div>
+
+    <nav>
+      <span class="nav-section-label">Navigation</span>
+
+      <a class="nav-item active" data-view="dashboard" href="#">
+        <i class="fa-solid fa-chart-bar"></i>
+        <span>Tableau de bord</span>
+      </a>
+
+      <a class="nav-item" data-view="create" href="#">
+        <i class="fa-solid fa-file-signature"></i>
+        <span>Créer Ordre</span>
+      </a>
+
+      <a class="nav-item" data-view="history" href="#">
+        <i class="fa-solid fa-calendar-alt"></i>
+        <span>Historique</span>
+      </a>
+
+      <a class="nav-item" data-view="agents" href="#">
+        <i class="fa-solid fa-users-cog"></i>
+        <span>Agents</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <a class="nav-item" href="#" id="open-io-modal">
+        <i class="fa-solid fa-sliders"></i>
+        <span>Import / Export</span>
+      </a>
+    </div>
+  </aside>
+
+  <!-- Sidebar mobile overlay -->
+  <div id="sidebar-overlay"></div>
+
+  <!-- ---- MAIN AREA ---- -->
+  <div id="main-wrap">
+
+    <!-- TOP BAR -->
+    <header id="topbar">
+      <button id="sidebar-toggle" title="Menu">
+        <i class="fa-solid fa-bars"></i>
+      </button>
+
+      <div class="topbar-title" id="topbar-title">Tableau de bord</div>
+
+      <div class="topbar-right">
+        <div class="agent-select-wrap">
+          <label for="active-agent-select"><i class="fa-solid fa-id-card"></i> Matricule :</label>
+          <select id="active-agent-select" class="topbar-agent-select">
+            <option value="">— Choisir par Matricule —</option>
+          </select>
+        </div>
+
+        <!-- Badge de synchronisation temps réel Mobile <-> PC -->
+        <div id="cloud-status-badge" class="cloud-badge status-syncing" title="Synchronisation temps réel Mobile ↔ PC (Cliquer pour gérer / tester)" onclick="if(typeof CloudSync !== 'undefined') CloudSync.openConfigModal()">
+          <i class="fa-solid fa-cloud"></i> <span>Synchronisation...</span>
+        </div>
+
+        <button id="dark-mode-toggle" title="Basculer mode sombre">
+          <i class="fa-solid fa-moon" id="dark-icon"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- VIEW CONTAINER -->
+    <main id="view-container">
+
+      <!-- ================================================================
+           VIEW 1: DASHBOARD
+           ================================================================ -->
+      <section id="view-dashboard" class="view active">
+        <div class="view-header">
+          <h2><i class="fa-solid fa-chart-bar"></i> Tableau de bord</h2>
+          <button class="btn btn-outline btn-sm" id="dashboard-refresh">
+            <i class="fa-solid fa-rotate-right"></i> Actualiser
+          </button>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stat-cards" id="dash-stat-cards">
+          <div class="stat-card">
+            <div class="stat-icon blue"><i class="fa-solid fa-file-alt"></i></div>
+            <div class="stat-body">
+              <div class="stat-value" id="dash-missions-month">–</div>
+              <div class="stat-label">Missions ce mois</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon green"><i class="fa-solid fa-calendar-check"></i></div>
+            <div class="stat-body">
+              <div class="stat-value" id="dash-missions-year">–</div>
+              <div class="stat-label">Missions cette année</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon orange"><i class="fa-solid fa-users"></i></div>
+            <div class="stat-body">
+              <div class="stat-value" id="dash-agents-total">–</div>
+              <div class="stat-label">Agents enregistrés</div>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon purple"><i class="fa-solid fa-map-marked-alt"></i></div>
+            <div class="stat-body">
+              <div class="stat-value" id="dash-jours-total">–</div>
+              <div class="stat-label">Jours de mission (année)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div class="charts-row">
+          <div class="chart-card">
+            <h3><i class="fa-solid fa-chart-column"></i> Missions par mois (12 derniers mois)</h3>
+            <canvas id="chart-monthly" height="220"></canvas>
+          </div>
+          <div class="chart-card">
+            <h3><i class="fa-solid fa-ranking-star"></i> Top 5 agents</h3>
+            <canvas id="chart-agents" height="220"></canvas>
+          </div>
+        </div>
+
+        <!-- Recent Missions Table -->
+        <div class="table-card">
+          <h3><i class="fa-solid fa-clock-rotate-left"></i> 5 dernières missions</h3>
+          <div id="dash-recent-missions">
+            <div class="empty-state">
+              <i class="fa-solid fa-inbox"></i>
+              <p>Aucune mission enregistrée</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 2: CRÉER ORDRE
+           ================================================================ -->
+      <section id="view-create" class="view">
+        <div class="view-header">
+          <h2><i class="fa-solid fa-file-signature"></i> Créer un Ordre de Mission</h2>
+        </div>
+
+        <div id="no-agent-warning" class="no-agent-warning hidden">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          Veuillez sélectionner un agent actif dans la barre supérieure avant de créer un ordre de mission.
+        </div>
+
+        <form id="mission-form" class="form-wrap" novalidate>
+
+          <!-- N° OM Banner -->
+          <div class="om-numero-banner">
+            <div>
+              <div class="om-num-label">Numéro d'ordre</div>
+              <div class="om-num-value" id="form-numero">OM-????-????</div>
+            </div>
+            <div style="text-align:right">
+              <div class="om-num-label">Date de création</div>
+              <div style="color:#fff;font-weight:600;font-size:0.95rem" id="form-date-display">–</div>
+            </div>
+          </div>
+
+          <!-- SECTION: Demandeur -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-user"></i> Demandeur
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label class="form-label">Nom et Prénom</label>
+                <input type="text" id="f-nom" class="form-control" readonly placeholder="Sélectionner un agent" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Matricule</label>
+                <input type="text" id="f-matricule" class="form-control" readonly />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Fonction</label>
+                <input type="text" id="f-fonction" class="form-control" readonly />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Direction</label>
+                <input type="text" id="f-direction" class="form-control" readonly />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Département</label>
+                <input type="text" id="f-departement" class="form-control" readonly />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Division</label>
+                <input type="text" id="f-division" class="form-control" readonly />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Service</label>
+                <input type="text" id="f-service" class="form-control" readonly />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Province / Préfecture</label>
+                <input type="text" id="f-province" class="form-control" readonly />
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION: Mission -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-route"></i> Objet de la mission
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label class="form-label">Lieu de déplacement <span style="color:var(--danger)">*</span></label>
+                <input type="text" id="f-lieu" class="form-control" placeholder="Ex: Casablanca, Rabat..." required />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group full">
+                <label class="form-label">Motif du déplacement <span style="color:var(--danger)">*</span></label>
+                <textarea id="f-motif" class="form-control" placeholder="Décrire l'objet et les raisons de la mission..." rows="3" required></textarea>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Date de départ <span style="color:var(--danger)">*</span></label>
+                <input type="date" id="f-date-depart" class="form-control" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Heure de départ</label>
+                <input type="time" id="f-heure-depart" class="form-control" value="08:00" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Date de retour <span style="color:var(--danger)">*</span></label>
+                <input type="date" id="f-date-retour" class="form-control" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">Heure de retour</label>
+                <input type="time" id="f-heure-retour" class="form-control" value="16:30" />
+              </div>
+            </div>
+          </div>
+
+          <!-- SECTION: Transport -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-car"></i> Moyen de transport
+            </div>
+            <div class="transport-options">
+
+              <div class="transport-option">
+                <label class="check-label">
+                  <input type="checkbox" id="f-covoiturage" />
+                  Covoiturage
+                </label>
+              </div>
+
+              <div class="transport-option">
+                <label class="check-label">
+                  <input type="checkbox" id="f-vehicule-service" />
+                  Véhicule de service
+                </label>
+                <div class="transport-detail">
+                  <input type="text" id="f-vehicule-service-num"
+                    class="form-control" placeholder="Immatriculation" disabled />
+                </div>
+              </div>
+
+              <div class="transport-option">
+                <label class="check-label">
+                  <input type="checkbox" id="f-transport-commun" />
+                  Transport commun
+                </label>
+              </div>
+
+              <div class="transport-option">
+                <label class="check-label">
+                  <input type="checkbox" id="f-vehicule-perso" />
+                  Véhicule personnel
+                </label>
+                <div class="transport-detail">
+                  <input type="text" id="f-vehicule-perso-marque"
+                    class="form-control" placeholder="Marque" disabled />
+                  <input type="text" id="f-vehicule-perso-pf"
+                    class="form-control" placeholder="Puissance fiscale" disabled />
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Kilométrage (shown conditionally) -->
+            <div class="km-row hidden" id="km-row">
+              <i class="fa-solid fa-gauge-high" style="color:var(--text-muted)"></i>
+              <label>Kilométrage :</label>
+              <input type="number" id="f-kilometrage" class="form-control"
+                placeholder="ex: 120" min="0" />
+              <span style="font-size:0.85rem;color:var(--text-muted)">km</span>
+            </div>
+          </div>
+
+          <!-- SECTION: Délivrance -->
+          <div class="form-section">
+            <div class="form-section-title">
+              <i class="fa-solid fa-stamp"></i> Signature et délivrance
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label class="form-label">Fait le</label>
+                <input type="date" id="f-date-creation" class="form-control" />
+              </div>
+              <div class="form-group">
+                <label class="form-label">À (lieu)</label>
+                <input type="text" id="f-lieu-creation" class="form-control" placeholder="Lieu de création" />
+              </div>
+            </div>
+          </div>
+
+          <!-- FORM ACTIONS -->
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary" id="btn-save-mission">
+              <i class="fa-solid fa-floppy-disk"></i> Enregistrer
+            </button>
+            <button type="button" class="btn btn-secondary" id="btn-preview-mission">
+              <i class="fa-solid fa-eye"></i> Aperçu A4
+            </button>
+            <button type="button" class="btn btn-outline" id="btn-reset-mission">
+              <i class="fa-solid fa-arrow-rotate-left"></i> Réinitialiser
+            </button>
+            <!-- Hidden edit id -->
+            <input type="hidden" id="f-edit-id" value="" />
+          </div>
+
+        </form>
+      </section>
+
+      <!-- ================================================================
+           VIEW 3: HISTORIQUE
+           ================================================================ -->
+      <section id="view-history" class="view">
+        <div class="view-header">
+          <h2><i class="fa-solid fa-calendar-alt"></i> Historique des Missions</h2>
+          <button class="btn btn-success btn-sm" id="btn-export-csv">
+            <i class="fa-solid fa-file-excel"></i> Exporter CSV
+          </button>
+        </div>
+
+        <div class="history-controls">
+          <!-- Month Navigation -->
+          <div class="month-nav">
+            <button id="hist-prev-month" title="Mois précédent">
+              <i class="fa-solid fa-chevron-left"></i>
+            </button>
+            <span class="month-label" id="hist-month-label">Septembre 2026</span>
+            <button id="hist-next-month" title="Mois suivant">
+              <i class="fa-solid fa-chevron-right"></i>
+            </button>
+          </div>
+
+          <!-- Filter bar -->
+          <div class="history-filter-bar">
+            <label style="font-size:0.85rem;color:var(--text-muted)">Agent :</label>
+            <select id="hist-filter-agent" class="form-control" style="width:auto;min-width:170px;padding:7px 12px">
+              <option value="">Tous les agents</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Stats pills -->
+        <div class="history-stats" id="hist-stats">
+          <div class="history-stat-pill">
+            <strong id="hist-count">0</strong> missions
+          </div>
+          <div class="history-stat-pill">
+            <strong id="hist-days">0</strong> jours
+          </div>
+        </div>
+
+        <!-- Grid -->
+        <div class="missions-grid" id="history-grid">
+          <div class="empty-state" style="grid-column:1/-1">
+            <i class="fa-solid fa-calendar-xmark"></i>
+            <p>Aucune mission ce mois</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================================================================
+           VIEW 4: AGENTS
+           ================================================================ -->
+      <section id="view-agents" class="view">
+        <div class="view-header">
+          <h2><i class="fa-solid fa-users-cog"></i> Gestion des Agents</h2>
+          <button class="btn btn-primary" id="btn-add-agent">
+            <i class="fa-solid fa-plus"></i> Ajouter un agent
+          </button>
+        </div>
+
+        <div class="agents-grid" id="agents-grid">
+          <div class="empty-state" style="grid-column:1/-1">
+            <i class="fa-solid fa-users-slash"></i>
+            <p>Aucun agent enregistré</p>
+            <small>Cliquez sur "Ajouter un agent" pour commencer</small>
+          </div>
+        </div>
+      </section>
+
+    </main><!-- end #view-container -->
+  </div><!-- end #main-wrap -->
+</div><!-- end #app-shell -->
+
+<!-- =====================================================================
+     MODALS
+     ===================================================================== -->
+
+<!-- ---- AGENT MODAL ---- -->
+<div class="modal-overlay" id="agent-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-user-plus"></i> <span id="agent-modal-title">Ajouter un agent</span></h3>
+      <button class="modal-close" data-close-modal="agent-modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <form id="agent-form" novalidate>
+        <div class="form-row">
+          <div class="form-group full">
+            <label class="form-label">Nom et Prénom <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="af-nom" class="form-control" placeholder="Ex: DARRAGE Ayoub" required />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Matricule <span style="color:var(--danger)">*</span></label>
+            <input type="text" id="af-matricule" class="form-control" placeholder="Ex: 83 182 D" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Fonction</label>
+            <input type="text" id="af-fonction" class="form-control" placeholder="Ex: Conducteur de Travaux" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Direction</label>
+            <input type="text" id="af-direction" class="form-control" placeholder="Ex: OUEZZANE" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Département</label>
+            <input type="text" id="af-departement" class="form-control" placeholder="Ex: Etude et Travaux" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Division</label>
+            <input type="text" id="af-division" class="form-control" placeholder="Ex: ETR Electricité" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Service</label>
+            <input type="text" id="af-service" class="form-control" placeholder="(optionnel)" />
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group full">
+            <label class="form-label">Province / Préfecture</label>
+            <input type="text" id="af-province" class="form-control" placeholder="Ex: OUEZZANE" />
+          </div>
+        </div>
+        <input type="hidden" id="af-edit-id" value="" />
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close-modal="agent-modal">Annuler</button>
+      <button class="btn btn-primary" id="btn-save-agent">
+        <i class="fa-solid fa-floppy-disk"></i> Enregistrer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- PREVIEW MODAL ---- -->
+<div class="modal-overlay" id="preview-modal">
+  <div class="modal-box preview-modal-box modal-xl">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-eye"></i> Aperçu de l'Ordre de Mission</h3>
+      <button class="modal-close" data-close-modal="preview-modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-body" style="padding:0;background:#6b7280">
+      <div id="preview-container">
+        <!-- A4 page injected here -->
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close-modal="preview-modal">Fermer</button>
+      <button class="btn btn-secondary" id="btn-print-preview">
+        <i class="fa-solid fa-print"></i> Imprimer
+      </button>
+      <button class="btn btn-primary" id="btn-export-pdf">
+        <i class="fa-solid fa-file-pdf"></i> Exporter PDF
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- IMPORT/EXPORT MODAL ---- -->
+<div class="modal-overlay" id="io-modal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-sliders"></i> Import / Export des données</h3>
+      <button class="modal-close" data-close-modal="io-modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+
+      <div class="io-section">
+        <h4><i class="fa-solid fa-file-export"></i> Exporter une sauvegarde</h4>
+        <p>Télécharger toutes vos données (agents + missions) dans un fichier JSON pour sauvegarde.</p>
+        <button class="btn btn-primary btn-sm" id="btn-export-json">
+          <i class="fa-solid fa-download"></i> Télécharger la sauvegarde JSON
+        </button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="io-section">
+        <h4><i class="fa-solid fa-file-import"></i> Importer une sauvegarde</h4>
+        <p>Restaurer les données depuis un fichier JSON précédemment exporté. Les données existantes seront fusionnées.</p>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <input type="file" id="import-file-input" accept=".json" style="display:none" />
+          <button class="btn btn-secondary btn-sm" id="btn-pick-import">
+            <i class="fa-solid fa-folder-open"></i> Choisir un fichier
+          </button>
+          <span id="import-file-name" style="font-size:0.82rem;color:var(--text-muted)">Aucun fichier sélectionné</span>
+        </div>
+        <button class="btn btn-success btn-sm mt-3" id="btn-import-json" style="display:none">
+          <i class="fa-solid fa-upload"></i> Importer
+        </button>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="danger-zone">
+        <h4><i class="fa-solid fa-triangle-exclamation"></i> Zone dangereuse</h4>
+        <p>Cette action supprimera <strong>toutes</strong> les données (agents, missions, compteurs). Cette action est irréversible.</p>
+        <button class="btn btn-danger btn-sm" id="btn-reset-all">
+          <i class="fa-solid fa-trash-can"></i> Réinitialiser toutes les données
+        </button>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close-modal="io-modal">Fermer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ---- CONFIRM MODAL ---- -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-header">
+      <h3><i class="fa-solid fa-circle-question"></i> Confirmation</h3>
+      <button class="modal-close" data-close-modal="confirm-modal">
+        <i class="fa-solid fa-xmark"></i>
+      </button>
+    </div>
+    <div class="modal-body">
+      <p id="confirm-message" style="font-size:0.92rem;line-height:1.6"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" data-close-modal="confirm-modal" id="confirm-cancel">Annuler</button>
+      <button class="btn btn-danger" id="confirm-ok">
+        <i class="fa-solid fa-check"></i> Confirmer
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================================
+     PRINT AREA (hidden, used for print)
+     ===================================================================== -->
+<div id="print-area" style="display:none"></div>
+
+<!-- =====================================================================
+     TOAST CONTAINER
+     ===================================================================== -->
+<div id="toast-container"></div>
+
+<!-- =====================================================================
+     SCRIPTS (order matters)
+     ===================================================================== -->
+<script src="js/logo_data.js"></script>
+<script src="js/html2pdf.bundle.min.js"></script>
+<script src="js/demo_data.js"></script>
+<script src="js/users.js"></script>
+<script src="js/missions.js"></script>
+<script src="js/history.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/pdf.js"></script>
+<script src="js/app.js"></script>
+<script src="js/cloud_sync.js"></script>
+
+<!-- Initialisation automatique de la date actuelle, horaires par défaut et CloudSync -->
+<script>
+(function() {
+  function setDefaultDatesAndTimes() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const today = `${y}-${m}-${d}`;
+
+    const dDep = document.getElementById('f-date-depart');
+    const dRet = document.getElementById('f-date-retour');
+    const hDep = document.getElementById('f-heure-depart');
+    const hRet = document.getElementById('f-heure-retour');
+    const dCreation = document.getElementById('f-date-creation');
+
+    if (dDep && !dDep.value) dDep.value = today;
+    if (dRet && !dRet.value) dRet.value = today;
+    if (hDep && !hDep.value) hDep.value = '08:00';
+    if (hRet && !hRet.value) hRet.value = '16:30';
+
+    // "Fait le" prend automatiquement la date de départ
+    if (dCreation && !dCreation.value) {
+      dCreation.value = dDep ? (dDep.value || today) : today;
+    }
+  }
+
+  // Au chargement initial
+  document.addEventListener('DOMContentLoaded', () => {
+    setDefaultDatesAndTimes();
+    if (typeof CloudSync !== 'undefined') {
+      CloudSync.init();
+    }
+
+    // Synchronisation automatique : quand la Date de départ change,
+    // "Fait le" s'aligne automatiquement dessus (tout en restant modifiable librement)
+    const dDep = document.getElementById('f-date-depart');
+    const dCreation = document.getElementById('f-date-creation');
+    if (dDep && dCreation) {
+      const syncDate = () => {
+        if (dDep.value) {
+          dCreation.value = dDep.value;
+        }
+      };
+      dDep.addEventListener('input', syncDate);
+      dDep.addEventListener('change', syncDate);
+    }
+  });
+
+  // Dès qu'on accède à la vue de création ou qu'on clique sur Créer
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-view="create"]') || e.target.closest('#btn-reset-mission') || e.target.closest('#btn-reset-form') || e.target.closest('#btn-new-mission')) {
+      setTimeout(setDefaultDatesAndTimes, 50);
+    }
+  });
+
+  // Exposer globalement pour missions.js
+  window.setDefaultMissionDates = setDefaultDatesAndTimes;
+})();
+</script>
+
+<!-- Service Worker registration -->
+<script>
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>

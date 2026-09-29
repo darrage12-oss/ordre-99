@@ -1,0 +1,16 @@
+{
+  "name": "Ordre de Mission - SRM TTA",
+  "short_name": "Ordre Mission",
+  "description": "Application pour établir les ordres de mission SRM TTA",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a5276",
+  "icons": [
+    {
+      "src": "assets/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}

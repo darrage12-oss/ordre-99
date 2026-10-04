@@ -6,7 +6,12 @@
   <meta name="theme-color" content="#1a5276" />
   <title>Ordre de Mission – SRM TTA</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="assets/logo.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Ordre Mission" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <!-- Local FontAwesome -->
   <link rel="stylesheet" href="css/font-awesome.min.css" />
   <!-- App Stylesheet -->
@@ -254,7 +259,7 @@
             <div class="form-row">
               <div class="form-group full">
                 <label class="form-label">Motif du déplacement <span style="color:var(--danger)">*</span></label>
-                <textarea id="f-motif" class="form-control" placeholder="Décrire l'objet et les raisons de la mission..." rows="3" required></textarea>
+                <textarea id="f-motif" class="form-control" placeholder="Décrire l'objet et les raisons de la mission..." rows="2" required style="white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;overflow-y:hidden;resize:none;min-height:60px;line-height:1.5;"></textarea>
               </div>
             </div>
             <div class="form-row">
@@ -683,6 +688,26 @@
       dDep.addEventListener('input', syncDate);
       dDep.addEventListener('change', syncDate);
     }
+
+    // Champ "Motif du déplacement" : passage à la ligne automatique + hauteur auto-ajustée
+    const motifEl = document.getElementById('f-motif');
+    if (motifEl) {
+      const autoResize = () => {
+        motifEl.style.height = 'auto';
+        motifEl.style.height = Math.max(60, motifEl.scrollHeight + 2) + 'px';
+      };
+      motifEl.addEventListener('input', autoResize);
+      motifEl.addEventListener('focus', autoResize);
+      if (motifEl.form) motifEl.form.addEventListener('reset', () => setTimeout(autoResize, 0));
+      window.addEventListener('resize', autoResize);
+      // Recalcul quand la valeur est remplie par le code (édition d'un ordre, reset)
+      const desc = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value');
+      Object.defineProperty(motifEl, 'value', {
+        get() { return desc.get.call(this); },
+        set(v) { desc.set.call(this, v); requestAnimationFrame(autoResize); }
+      });
+      autoResize();
+    }
   });
 
   // Dès qu'on accède à la vue de création ou qu'on clique sur Créer
@@ -700,7 +725,11 @@
 <!-- Service Worker registration -->
 <script>
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js', { scope: './' })
+      .then(reg => reg.update())
+      .catch(err => console.warn('[SW] Échec enregistrement :', err));
+  });
 }
 </script>
 </body>

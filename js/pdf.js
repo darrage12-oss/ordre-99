@@ -42,35 +42,86 @@ const PDF = (() => {
       .replace(/"/g, '&quot;');
   }
 
-  /* ---- Découpage automatique et intelligent du motif sur 2 lignes ---- */
-  function _splitMotif(text, maxLine1 = 65, maxLine2 = 95) {
-    if (!text) return { line1: '', line2: '' };
-    const str = String(text).trim();
+  /* ---- Retour à la ligne automatique du motif, basé sur la LARGEUR RÉELLE du texte ----
+   * Le texte est mesuré avec la même police que le PDF (canvas.measureText).
+   * Chaque ligne est remplie jusqu'au bord du cadre, puis le texte passe à la ligne suivante
+   * sans couper les mots. Maximum 3 lignes ; si le texte est encore trop long,
+   * la taille de police est réduite progressivement pour que tout tienne dans le cadre.
+   */
+  const MM_TO_PX = 96 / 25.4;
+  const PT_TO_PX = 96 / 72;
+  const A4_FONT = "'Aptos Narrow', 'Calibri', 'Segoe UI', Arial, sans-serif";
+  let _measureCtx = null;
 
-    // Si saut de ligne manuel tapé par l'utilisateur
-    if (str.includes('\n')) {
-      const parts = str.split('\n');
-      return {
-        line1: parts[0].slice(0, maxLine1).trim(),
-        line2: parts.slice(1).join(' ').slice(0, maxLine2).trim()
-      };
+  function _textWidth(text, sizePt, bold) {
+    if (!_measureCtx) _measureCtx = document.createElement('canvas').getContext('2d');
+    _measureCtx.font = `${bold ? 'bold ' : ''}${(sizePt * PT_TO_PX).toFixed(2)}px ${A4_FONT}`;
+    return _measureCtx.measureText(text).width;
+  }
+
+  function _wrapWords(words, widths, sizePt, maxLines) {
+    const lines = [];
+    let current = '';
+    let i = 0;
+    while (i < words.length) {
+      const lineIdx = lines.length;
+      const maxW = widths[Math.min(lineIdx, widths.length - 1)];
+      const word = words[i];
+      const candidate = current ? current + ' ' + word : word;
+
+      if (_textWidth(candidate, sizePt, true) <= maxW) {
+        current = candidate;
+        i++;
+      } else if (!current) {
+        // Mot plus long que la ligne entière : on le coupe caractère par caractère
+        let part = '';
+        for (const ch of word) {
+          if (_textWidth(part + ch, sizePt, true) > maxW) break;
+          part += ch;
+        }
+        part = part || word[0];
+        lines.push(part);
+        words[i] = word.slice(part.length);
+        if (!words[i]) i++;
+      } else {
+        lines.push(current);
+        current = '';
+      }
+      if (lines.length > maxLines) return null;
     }
+    if (current) lines.push(current);
+    return lines.length <= maxLines ? lines : null;
+  }
 
-    // Si tout tient sur la 1ère ligne
-    if (str.length <= maxLine1) {
-      return { line1: str, line2: '' };
+  function _wrapMotif(text, maxLines = 3) {
+    const str = String(text || '').replace(/\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!str) return { lines: [''], fontSize: 9.5 };
+
+    // Largeur utile d'une ligne : A4 (210mm) - marges (2 x 8.3mm) - bordures - padding cellule (2 x 5pt)
+    const rowWidthPx = (210 - 2 * 8.3 - 1) * MM_TO_PX - 2 * 5 * PT_TO_PX;
+    const valueInsetPx = 4 + 2 + 6;          // left:4px + right:2px + marge de sécurité
+    const labelPx = _textWidth('Motif du déplacement :', 9, false) + 4;
+    const firstLineW = rowWidthPx - labelPx - valueInsetPx;
+    const otherLineW = rowWidthPx - valueInsetPx;
+
+    for (const size of [9.5, 9, 8.5, 8, 7.5, 7]) {
+      const lines = _wrapWords(str.split(' '), [firstLineW, otherLineW], size, maxLines);
+      if (lines) return { lines, fontSize: size };
     }
-
-    // Coupure propre sur un espace pour ne pas couper un mot en deux
-    let cut = str.lastIndexOf(' ', maxLine1);
-    if (cut === -1 || cut < maxLine1 * 0.4) {
-      cut = maxLine1;
+    // Dernier recours : police minimale, texte tronqué proprement à 3 lignes
+    const fallback = [];
+    const words = str.split(' ');
+    let cur = '';
+    for (const w of words) {
+      const maxW = fallback.length === 0 ? firstLineW : otherLineW;
+      const cand = cur ? cur + ' ' + w : w;
+      if (_textWidth(cand, 7, true) <= maxW) { cur = cand; continue; }
+      fallback.push(cur);
+      cur = w;
+      if (fallback.length === maxLines) break;
     }
-
-    const line1 = str.substring(0, cut).trim();
-    const line2 = str.substring(cut).trim().slice(0, maxLine2);
-
-    return { line1, line2 };
+    if (fallback.length < maxLines && cur) fallback.push(cur);
+    return { lines: fallback.slice(0, maxLines), fontSize: 7 };
   }
 
   /* ---- Générateur du template HTML 100% conforme au document officiel ---- */
@@ -97,12 +148,22 @@ const PDF = (() => {
 
     const lieuCreation = _esc(m.lieuCreation || agent.province || 'OUEZZANE');
 
-    // Découpage automatique du motif en 2 lignes sans déborder
-    const motifParts = _splitMotif(m.motifDeplacement, 65, 95);
+    // Retour à la ligne automatique du motif selon la largeur réelle du cadre
+    const motif = _wrapMotif(m.motifDeplacement, 3);
+    const motifExtra = motif.lines.length - 1;   // nombre de lignes supplémentaires (0 à 2)
 
     // Ajustement dynamique de la hauteur des visas pour garantir STRICTEMENT 1 seule page A4
-    const visaH1 = motifParts.line2 ? '33mm' : '37mm';
-    const visaH2 = motifParts.line2 ? '36mm' : '41mm';
+    const visaH1 = ['37mm', '33mm', '29.5mm'][motifExtra];
+    const visaH2 = ['41mm', '36mm', '32mm'][motifExtra];
+    const motifStyle = motif.fontSize !== 9.5 ? ` style="font-size:${motif.fontSize}pt"` : '';
+    const motifExtraRows = motif.lines.slice(1).map(line => `
+        <tr>
+          <td colspan="2" class="om-td-row om-td-motif-sub">
+            <div class="om-field">
+              <span class="om-dots"><span class="om-value"${motifStyle}>${_esc(line)}</span></span>
+            </div>
+          </td>
+        </tr>`).join('');
 
     // Cases à cocher carrées conformes à l'original (11x11px)
     const checkSvg = `<svg width="11" height="11" viewBox="0 0 12 12" style="vertical-align: middle; margin-right: 4px; display: inline-block;">
@@ -272,20 +333,12 @@ const PDF = (() => {
           <td colspan="2" class="om-td-row">
             <div class="om-field">
               <span class="om-label">Motif du d&eacute;placement :</span>
-              <span class="om-dots"><span class="om-value">${_esc(motifParts.line1)}</span></span>
+              <span class="om-dots"><span class="om-value"${motifStyle}>${_esc(motif.lines[0])}</span></span>
             </div>
           </td>
         </tr>
-        <!-- LIGNE MOTIF 2 (passage automatique à la 2ème ligne sans sortir du cadre) -->
-        ${motifParts.line2 ? `
-        <tr>
-          <td colspan="2" class="om-td-row om-td-motif-sub">
-            <div class="om-field">
-              <span class="om-dots"><span class="om-value">${_esc(motifParts.line2)}</span></span>
-            </div>
-          </td>
-        </tr>
-        ` : ''}
+        <!-- LIGNES MOTIF SUIVANTES (retour à la ligne automatique au bord du cadre) -->
+        ${motifExtraRows}
         <tr>
           <td class="om-td-row om-col-half">
             <div class="om-field">

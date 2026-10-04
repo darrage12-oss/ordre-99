@@ -1,4 +1,12 @@
-const CACHE_NAME = 'ordre-mission-v3';
+/**
+ * sw.js - Service Worker PWA Ordre de Mission SRM TTA
+ * - Précache tolérant : un fichier manquant ne bloque plus l'installation
+ * - Network-first : les mises à jour GitHub sont visibles immédiatement
+ * - Hors-ligne : repli sur le cache
+ * - Les requêtes externes (synchronisation Cloud) ne sont jamais interceptées
+ */
+const CACHE_NAME = 'ordre-mission-v5';
+
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -6,40 +14,75 @@ const ASSETS_TO_CACHE = [
   './css/style.css',
   './css/font-awesome.min.css',
   './assets/logo.png',
+  './assets/icons/icon-192.png',
+  './assets/icons/icon-512.png',
+  './assets/icons/maskable-192.png',
+  './assets/icons/maskable-512.png',
   './js/logo_data.js',
-  './js/demo_data.js',
   './js/html2pdf.bundle.min.js',
+  './js/demo_data.js',
   './js/users.js',
   './js/missions.js',
+  './js/history.js',
+  './js/dashboard.js',
   './js/pdf.js',
-  './js/app.js'
+  './js/app.js',
+  './js/cloud_sync.js'
 ];
 
+/* ---- Installation : mise en cache fichier par fichier ---- */
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      return cache.addAll(ASSETS_TO_CACHE);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME)
+      .then(cache => Promise.allSettled(
+        ASSETS_TO_CACHE.map(url =>
+          cache.add(new Request(url, { cache: 'reload' }))
+            .catch(err => console.warn('[SW] Non mis en cache :', url, err))
+        )
+      ))
+      .then(() => self.skipWaiting())
   );
 });
 
+/* ---- Activation : suppression des anciens caches ---- */
 self.addEventListener('activate', event => {
   event.waitUntil(
-    caches.keys().then(keys => {
-      return Promise.all(
+    caches.keys()
+      .then(keys => Promise.all(
         keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key))
-      );
-    }).then(() => self.clients.claim())
+      ))
+      .then(() => self.clients.claim())
   );
 });
 
+/* ---- Requêtes : network-first, repli cache ---- */
 self.addEventListener('fetch', event => {
+  const req = event.request;
+
+  // Ignorer tout ce qui n'est pas GET
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+
+  // Ignorer les requêtes externes (ntfy.sh, CDN, Firebase...) et les flux SSE
+  if (url.origin !== self.location.origin) return;
+  if (req.headers.get('accept') === 'text/event-stream') return;
+
   event.respondWith(
-    caches.match(event.request).then(cachedResponse => {
-      return cachedResponse || fetch(event.request).catch(() => {
-        // Fallback to cache if network fails
-        return caches.match('./index.html');
-      });
-    })
+    fetch(req)
+      .then(response => {
+        if (response && response.ok) {
+          const copy = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+        }
+        return response;
+      })
+      .catch(() =>
+        caches.match(req, { ignoreSearch: true }).then(cached => {
+          if (cached) return cached;
+          if (req.mode === 'navigate') return caches.match('./index.html');
+          return new Response('', { status: 504, statusText: 'Hors ligne' });
+        })
+      )
   );
 });

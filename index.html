@@ -6,12 +6,7 @@
   <meta name="theme-color" content="#1a5276" />
   <title>Ordre de Mission – SRM TTA</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png" />
-  <link rel="apple-touch-icon" href="assets/icons/icon-192.png" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Ordre Mission" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <link rel="icon" href="assets/logo.png" />
   <!-- Local FontAwesome -->
   <link rel="stylesheet" href="css/font-awesome.min.css" />
   <!-- App Stylesheet -->
@@ -705,11 +700,7 @@
 <!-- Service Worker registration -->
 <script>
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js', { scope: './' })
-      .then(reg => reg.update())
-      .catch(err => console.warn('[SW] Échec enregistrement :', err));
-  });
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 </script>
 </body>

@@ -2063,3 +2063,309 @@ body.dark-mode .no-agent-warning {
   }
 }
 
+/* ==========================================================================
+   FORMAT TÉLÉPHONE SPÉCIFIQUE (Ergonomie Native Smartphone)
+   ========================================================================== */
+
+/* Toggle détails administratifs demandeur */
+.btn-toggle-demandeur {
+  display: none;
+  background: none;
+  border: 1px dashed var(--border);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  width: 100%;
+  margin-top: 8px;
+  cursor: pointer;
+  text-align: center;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+/* Grille dates & heures */
+.dates-times-container {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.date-time-card {
+  background: var(--bg-table-odd);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+.dt-card-header {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.dt-inputs-row {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 8px;
+}
+
+/* Style des tuiles de transport sur mobile et desktop */
+.transport-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.92rem;
+  font-weight: 600;
+}
+.transport-title i {
+  color: var(--primary);
+  font-size: 1.05rem;
+}
+
+@media (max-width: 768px) {
+  /* En-tête smartphone épuré */
+  #topbar {
+    height: 56px;
+    padding: 0 12px;
+    position: sticky;
+    top: 0;
+    z-index: 800;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  }
+  .topbar-title {
+    font-size: 0.92rem !important;
+    font-weight: 800;
+    max-width: 130px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .user-session-badge {
+    padding: 3px 8px;
+    font-size: 0.76rem;
+  }
+  .cloud-badge span {
+    display: none;
+  }
+  .cloud-badge {
+    padding: 5px 8px;
+  }
+
+  /* Conteneur principal plein écran */
+  #view-container {
+    padding: 12px 8px 85px !important;
+  }
+  .view-header {
+    margin-bottom: 12px;
+  }
+  .view-header h2 {
+    font-size: 1.15rem;
+  }
+
+  /* Formulaire : Cartes compactes et fluides */
+  .form-wrap {
+    border-radius: 14px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.04);
+  }
+  .om-numero-banner {
+    padding: 10px 14px;
+  }
+  .om-num-value {
+    font-size: 1.1rem;
+  }
+  .form-section {
+    padding: 14px 12px !important;
+  }
+  .form-section-title {
+    font-size: 0.8rem;
+    margin-bottom: 12px;
+  }
+
+  /* Accordéon Demandeur sur téléphone */
+  .btn-toggle-demandeur {
+    display: inline-flex;
+  }
+  .demandeur-extra-details {
+    display: none;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px dashed var(--border);
+  }
+  .demandeur-extra-details.open {
+    display: block;
+    animation: fadeIn 0.2s ease;
+  }
+
+  /* Grille des dates & heures sur téléphone */
+  .dates-times-container {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .date-time-card {
+    padding: 10px 12px;
+    background: rgba(41, 128, 185, 0.04);
+    border: 1px solid rgba(41, 128, 185, 0.2);
+  }
+
+  /* Tuiles de transport grand format pour le doigt */
+  .transport-options {
+    gap: 8px;
+  }
+  .transport-option {
+    background: var(--bg-card);
+    border: 1.5px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    flex-direction: column;
+    align-items: flex-start;
+    transition: all 0.2s ease;
+    cursor: pointer;
+  }
+  .transport-option:has(input[type="checkbox"]:checked) {
+    border-color: var(--primary);
+    background: rgba(41, 128, 185, 0.08);
+  }
+  .transport-option .check-label {
+    width: 100%;
+    min-width: unset;
+    font-size: 0.95rem;
+    font-weight: 600;
+  }
+  .transport-option input[type="checkbox"] {
+    width: 22px;
+    height: 22px;
+    margin-right: 8px;
+  }
+  .transport-option .transport-detail {
+    width: 100%;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed var(--border);
+  }
+  .transport-option .transport-detail .form-control {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Actions de formulaire : Bouton Enregistrer géant adapté au pouce */
+  .form-actions {
+    padding: 14px 12px !important;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .form-actions #btn-save-mission {
+    width: 100%;
+    padding: 13px !important;
+    font-size: 1.05rem !important;
+    font-weight: 800;
+    box-shadow: 0 4px 12px rgba(26, 82, 118, 0.25);
+    order: 1;
+  }
+  .form-actions #btn-preview-mission {
+    width: 100%;
+    order: 2;
+  }
+  .form-actions #btn-reset-mission {
+    width: 100%;
+    order: 3;
+  }
+
+  /* Tableau de bord sur mobile */
+  .stat-cards {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+  .stat-card {
+    padding: 12px 10px !important;
+  }
+  .stat-icon {
+    width: 36px !important;
+    height: 36px !important;
+    font-size: 1.05rem !important;
+  }
+  .stat-value {
+    font-size: 1.3rem !important;
+  }
+  .stat-label {
+    font-size: 0.72rem !important;
+  }
+
+  /* Table des 5 dernières missions transformée en liste fluide */
+  .table-card {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Historique sur mobile */
+  .history-controls {
+    flex-direction: column;
+    gap: 10px;
+  }
+  .month-nav {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .month-nav button {
+    padding: 8px 16px;
+    font-size: 1.1rem;
+  }
+  .history-filter-bar {
+    width: 100%;
+  }
+  .history-filter-bar select {
+    width: 100% !important;
+  }
+
+  /* Cartes de mission sur mobile */
+  .missions-grid {
+    grid-template-columns: 1fr !important;
+    gap: 10px;
+  }
+  .mission-card {
+    border-radius: 12px;
+  }
+  .mission-card-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .mission-card-actions .btn {
+    width: 100%;
+  }
+
+  /* Aperçu A4 : Mise à l'échelle automatique sur écran de téléphone */
+  .preview-modal-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    border-radius: 0 !important;
+  }
+  .preview-modal-box .modal-body {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    justify-content: center;
+    padding: 10px 4px !important;
+  }
+  #preview-container {
+    transform-origin: top center;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+  #preview-container .a4-document {
+    transform: scale(0.48);
+    transform-origin: top center;
+    margin-bottom: -150mm;
+  }
+}
+
+

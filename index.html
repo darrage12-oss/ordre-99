@@ -209,7 +209,7 @@
           </div>
 
           <!-- SECTION: Demandeur -->
-          <div class="form-section">
+          <div class="form-section section-demandeur">
             <div class="form-section-title">
               <i class="fa-solid fa-user"></i> Demandeur
             </div>
@@ -229,30 +229,38 @@
                 <input type="text" id="f-fonction" class="form-control" readonly />
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Direction</label>
-                <input type="text" id="f-direction" class="form-control" readonly />
+
+            <!-- Bouton accordéon pour mobile : masque les détails administratifs readonly -->
+            <button type="button" class="btn-toggle-demandeur" onclick="document.getElementById('demandeur-extra-details').classList.toggle('open'); this.querySelector('i').classList.toggle('fa-chevron-down'); this.querySelector('i').classList.toggle('fa-chevron-up');">
+              <i class="fa-solid fa-chevron-down"></i> Détails administratifs (Direction, Département...)
+            </button>
+
+            <div id="demandeur-extra-details" class="demandeur-extra-details">
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Direction</label>
+                  <input type="text" id="f-direction" class="form-control" readonly />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Département</label>
+                  <input type="text" id="f-departement" class="form-control" readonly />
+                </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Département</label>
-                <input type="text" id="f-departement" class="form-control" readonly />
+              <div class="form-row">
+                <div class="form-group">
+                  <label class="form-label">Division</label>
+                  <input type="text" id="f-division" class="form-control" readonly />
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Service</label>
+                  <input type="text" id="f-service" class="form-control" readonly />
+                </div>
               </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Division</label>
-                <input type="text" id="f-division" class="form-control" readonly />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Service</label>
-                <input type="text" id="f-service" class="form-control" readonly />
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Province / Préfecture</label>
-                <input type="text" id="f-province" class="form-control" readonly />
+              <div class="form-row">
+                <div class="form-group full">
+                  <label class="form-label">Province / Préfecture</label>
+                  <input type="text" id="f-province" class="form-control" readonly />
+                </div>
               </div>
             </div>
           </div>
@@ -265,7 +273,7 @@
             <div class="form-row">
               <div class="form-group full">
                 <label class="form-label">Lieu de déplacement <span style="color:var(--danger)">*</span></label>
-                <input type="text" id="f-lieu" class="form-control" placeholder="Ex: Casablanca, Rabat..." required />
+                <input type="text" id="f-lieu" class="form-control" placeholder="Ex: Casablanca, Rabat, Tanger..." required />
               </div>
             </div>
             <div class="form-row">
@@ -274,22 +282,34 @@
                 <textarea id="f-motif" class="form-control" placeholder="Décrire l'objet et les raisons de la mission..." rows="2" required style="white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;overflow-y:hidden;resize:none;min-height:60px;line-height:1.5;"></textarea>
               </div>
             </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label class="form-label">Date de départ <span style="color:var(--danger)">*</span></label>
-                <input type="date" id="f-date-depart" class="form-control" required />
+
+            <!-- Blocs Dates & Heures optimisés mobile -->
+            <div class="dates-times-container">
+              <div class="date-time-card">
+                <div class="dt-card-header"><i class="fa-solid fa-plane-departure" style="color:var(--primary);"></i> Départ</div>
+                <div class="dt-inputs-row">
+                  <div class="form-group">
+                    <label class="form-label">Date <span style="color:var(--danger)">*</span></label>
+                    <input type="date" id="f-date-depart" class="form-control" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Heure</label>
+                    <input type="time" id="f-heure-depart" class="form-control" value="08:00" />
+                  </div>
+                </div>
               </div>
-              <div class="form-group">
-                <label class="form-label">Heure de départ</label>
-                <input type="time" id="f-heure-depart" class="form-control" value="08:00" />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Date de retour <span style="color:var(--danger)">*</span></label>
-                <input type="date" id="f-date-retour" class="form-control" required />
-              </div>
-              <div class="form-group">
-                <label class="form-label">Heure de retour</label>
-                <input type="time" id="f-heure-retour" class="form-control" value="16:30" />
+              <div class="date-time-card">
+                <div class="dt-card-header"><i class="fa-solid fa-plane-arrival" style="color:var(--success);"></i> Retour</div>
+                <div class="dt-inputs-row">
+                  <div class="form-group">
+                    <label class="form-label">Date <span style="color:var(--danger)">*</span></label>
+                    <input type="date" id="f-date-retour" class="form-control" required />
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label">Heure</label>
+                    <input type="time" id="f-heure-retour" class="form-control" value="16:30" />
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -304,38 +324,38 @@
               <div class="transport-option">
                 <label class="check-label">
                   <input type="checkbox" id="f-covoiturage" />
-                  Covoiturage
+                  <span class="transport-title"><i class="fa-solid fa-users"></i> Covoiturage</span>
                 </label>
               </div>
 
               <div class="transport-option">
                 <label class="check-label">
                   <input type="checkbox" id="f-vehicule-service" />
-                  Véhicule de service
+                  <span class="transport-title"><i class="fa-solid fa-car-side"></i> Véhicule de service</span>
                 </label>
                 <div class="transport-detail">
                   <input type="text" id="f-vehicule-service-num"
-                    class="form-control" placeholder="Immatriculation" disabled />
+                    class="form-control" placeholder="N° Immatriculation" disabled />
                 </div>
               </div>
 
               <div class="transport-option">
                 <label class="check-label">
                   <input type="checkbox" id="f-transport-commun" />
-                  Transport commun
+                  <span class="transport-title"><i class="fa-solid fa-bus"></i> Transport commun</span>
                 </label>
               </div>
 
               <div class="transport-option">
                 <label class="check-label">
                   <input type="checkbox" id="f-vehicule-perso" />
-                  Véhicule personnel
+                  <span class="transport-title"><i class="fa-solid fa-car"></i> Véhicule personnel</span>
                 </label>
                 <div class="transport-detail">
                   <input type="text" id="f-vehicule-perso-marque"
                     class="form-control" placeholder="Marque" disabled />
                   <input type="text" id="f-vehicule-perso-pf"
-                    class="form-control" placeholder="Puissance fiscale" disabled />
+                    class="form-control" placeholder="Puissance fiscale (CV)" disabled />
                 </div>
               </div>
 

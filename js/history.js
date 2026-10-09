@@ -45,10 +45,19 @@ const History = (() => {
     const sel = document.getElementById('hist-filter-agent');
     if (!sel) return;
 
+    // Si utilisateur normal (non-admin), masquer complètement le filtre pour garantir la confidentialité
+    if (typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin()) {
+      if (sel.parentElement) sel.parentElement.style.display = 'none';
+      return;
+    }
+
+    if (sel.parentElement) sel.parentElement.style.display = 'flex';
+
     const current = sel.value;
     sel.innerHTML = '<option value="">Tous les matricules</option>';
 
     Users.getAll().forEach(u => {
+      if (u.matricule === 'ADMIN') return;
       const opt = document.createElement('option');
       opt.value = u.id;
       opt.textContent = u.matricule || u.nom;

@@ -52,16 +52,41 @@ const Missions = (() => {
     return _load().find(m => m.id === id) || null;
   }
 
-  function getByMonth(year, month) {
+  /* ---- Confidentialité : filtrage des missions selon l'agent connecté ---- */
+  function getVisibleMissions() {
+    const all = getAll();
+    if (typeof Auth === 'undefined' || !Auth.isLoggedIn()) return all;
+    if (Auth.isAdmin()) return all;
+
+    const user = Auth.getCurrentUser();
+    if (!user) return all;
+
+    const uMat = (user.matricule || '').toUpperCase().replace(/\s+/g, '');
+    return all.filter(m => {
+      if (m.userId === user.id) return true;
+      const mMat = (m.agent?.matricule || '').toUpperCase().replace(/\s+/g, '');
+      return mMat && mMat === uMat;
+    });
+  }
+
+  function getVisibleByMonth(year, month) {
     // month: 0-indexed
-    return _load().filter(m => {
+    const visible = getVisibleMissions();
+    return visible.filter(m => {
       const d = new Date(m.dateDepart);
       return d.getFullYear() === year && d.getMonth() === month;
     }).sort((a, b) => new Date(a.dateDepart) - new Date(b.dateDepart));
   }
 
+  function getByMonth(year, month) {
+    // Alias vers getVisibleByMonth pour assurer la confidentialité
+    return getVisibleByMonth(year, month);
+  }
+
   function save(data) {
     const missions = _load();
+    data.updatedAt = new Date().toISOString();
+    if (!data.createdAt) data.createdAt = data.updatedAt;
     if (data.id) {
       const idx = missions.findIndex(m => m.id === data.id);
       if (idx !== -1) {
@@ -74,13 +99,25 @@ const Missions = (() => {
       missions.push(data);
     }
     _save(missions);
-    if (typeof CloudSync !== 'undefined') CloudSync.onLocalChange();
+    if (typeof CloudSync !== 'undefined') {
+      if (typeof CloudSync.onMissionSaved === 'function') {
+        CloudSync.onMissionSaved(data);
+      } else if (typeof CloudSync.onLocalChange === 'function') {
+        CloudSync.onLocalChange();
+      }
+    }
     return data;
   }
 
   function remove(id) {
     _save(_load().filter(m => m.id !== id));
-    if (typeof CloudSync !== 'undefined') CloudSync.onLocalChange();
+    if (typeof CloudSync !== 'undefined') {
+      if (typeof CloudSync.onMissionDeleted === 'function') {
+        CloudSync.onMissionDeleted(id);
+      } else if (typeof CloudSync.onLocalChange === 'function') {
+        CloudSync.onLocalChange();
+      }
+    }
   }
 
   /* ---- Calculate mission days ---- */
@@ -406,6 +443,8 @@ const Missions = (() => {
   return {
     init,
     getAll,
+    getVisibleMissions,
+    getVisibleByMonth,
     getById,
     getByMonth,
     save,

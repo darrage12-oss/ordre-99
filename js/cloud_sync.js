@@ -1,32 +1,47 @@
 /**
- * cloud_sync.js - Module de synchronisation temps réel Cloud pour Ordre de Mission SRM TTA
+ * cloud_sync.js - Module de synchronisation temps réel MQTT WebSocket & Cloud pour SRM TTA
  * Fonctionne instantanément entre PC et Téléphones portables (4G / 5G / Wi-Fi)
- * via le protocole Cloud HTTPS / Server-Sent Events (SSE) avec réconciliation automatique.
+ * - Protocole : MQTT sur WebSocket sécurisé (WSS) via brokers mondiaux haute disponibilité
+ * - Basculement automatique : EMQX (port 8084) <-> HiveMQ (port 8884)
+ * - Messages retenus (Retained) : le dernier état complet est transmis en < 50ms à tout nouvel appareil
+ * - Synchronisation bidirectionnelle instantanée : Création, Modification et Suppression
  */
 
 const CloudSync = (() => {
   'use strict';
 
   const STORAGE_CONFIG_KEY = 'ordre_mission_cloud_config';
-  const DEFAULT_TOPIC = 'srm_tta_ouezzane_om_sync_2026';
-  const DEFAULT_SERVER = 'https://ntfy.sh';
+  const STORAGE_DELETED_KEY = 'ordre_mission_deleted_ids';
 
-  // ID unique pour cet appareil/onglet afin d'éviter les boucles d'écho
-  const _clientId = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5);
+  // Serveurs MQTT publics supportant WebSockets SSL (WSS)
+  const BROKERS = [
+    { host: 'broker.emqx.io', port: 8084, path: '/mqtt', name: 'EMQX Cloud' },
+    { host: 'broker.hivemq.com', port: 8884, path: '/mqtt', name: 'HiveMQ Cloud' }
+  ];
+
+  // ID unique pour cet appareil/onglet afin d'éviter l'écho de ses propres messages
+  const _clientId = 'srm_' + (navigator.userAgent.match(/Mobile|Android|iPhone/i) ? 'mob_' : 'pc_') + Date.now().toString(36) + '_' + Math.random().toString(36).substr(2, 5);
 
   let _config = {
-    server: DEFAULT_SERVER,
-    topic: DEFAULT_TOPIC,
+    channel: 'srm_tta_ouezzane_2026',
     firebaseUrl: '',
-    autoSync: true,
-    lastSync: 0
+    autoSync: true
   };
 
-  let _eventSource = null;
-  let _pollInterval = null;
-  let _isOnline = false;
-  let _lastProcessedTime = 0;
-  let _isSending = false;
+  let _client = null;
+  let _currentBrokerIdx = 0;
+  let _isConnected = false;
+  let _isConnecting = false;
+  let _reconnectTimer = null;
+  let _stateDebounceTimer = null;
+
+  /* ---- Topics MQTT ---- */
+  function _getStateTopic() {
+    return `${_config.channel}/missions/state`;
+  }
+  function _getDeltaTopic() {
+    return `${_config.channel}/missions/delta`;
+  }
 
   /* ---- 1. Gestion de la configuration ---- */
   function loadConfig() {
@@ -38,352 +53,498 @@ const CloudSync = (() => {
     } catch (e) {
       console.warn('[CloudSync] Erreur chargement config:', e);
     }
-    // Nettoyer le nom de topic
-    if (!_config.topic) _config.topic = DEFAULT_TOPIC;
-    _config.topic = _config.topic.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    if (!_config.channel) _config.channel = 'srm_tta_ouezzane_2026';
+    _config.channel = _config.channel.toLowerCase().replace(/[^a-z0-9_-]/g, '_');
   }
 
   function saveConfig() {
     localStorage.setItem(STORAGE_CONFIG_KEY, JSON.stringify(_config));
   }
 
-  /* ---- 2. Badge UI barre supérieure ---- */
+  /* ---- 2. Gestion des identifiants supprimés (Tombstones) ---- */
+  function _getDeletedIds() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_DELETED_KEY) || '[]');
+    } catch { return []; }
+  }
+
+  function _addDeletedId(id) {
+    if (!id) return;
+    const list = _getDeletedIds();
+    if (!list.includes(id)) {
+      list.push(id);
+      // Conserver les 200 dernières suppressions max
+      if (list.length > 200) list.shift();
+      localStorage.setItem(STORAGE_DELETED_KEY, JSON.stringify(list));
+    }
+  }
+
+  /* ---- 3. Badge UI barre supérieure ---- */
   function updateBadge(status, text) {
     const badge = document.getElementById('cloud-status-badge');
     if (!badge) return;
 
     badge.className = `cloud-badge status-${status}`;
     let icon = 'fa-cloud';
-    if (status === 'online') icon = 'fa-cloud-arrow-up';
+    if (status === 'online') icon = 'fa-bolt';
     if (status === 'syncing') icon = 'fa-arrows-rotate fa-spin';
     if (status === 'offline') icon = 'fa-cloud-slash';
 
     badge.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${text}</span>`;
   }
 
-  /* ---- 3. Connexion temps réel SSE (Server-Sent Events) ---- */
-  function _connectSSE() {
-    if (_eventSource) {
-      try { _eventSource.close(); } catch (e) {}
-      _eventSource = null;
-    }
+  /* ---- 4. Connexion MQTT via WebSockets sécurisés ---- */
+  function _connect() {
+    if (_isConnecting) return;
+    _isConnecting = true;
 
-    const sseUrl = `${_config.server}/${_config.topic}/sse`;
-
-    try {
-      _eventSource = new EventSource(sseUrl);
-
-      _eventSource.onopen = () => {
-        _isOnline = true;
-        const total = (typeof Missions !== 'undefined') ? Missions.getAll().length : 0;
-        updateBadge('online', `En direct (${total} OM)`);
-      };
-
-      _eventSource.onmessage = async (event) => {
-        try {
-          const raw = JSON.parse(event.data);
-          if (raw.attachment && raw.attachment.url) {
-            try {
-              const fileRes = await fetch(raw.attachment.url);
-              const payload = await fileRes.json();
-              _handleIncomingPayload(payload, raw.time);
-              return;
-            } catch (fe) {}
-          }
-          if (raw.event === 'message' && raw.message) {
-            const payload = JSON.parse(raw.message);
-            _handleIncomingPayload(payload, raw.time);
-          }
-        } catch (e) {
-          // Message brut non-JSON ignoré
-        }
-      };
-
-      _eventSource.onerror = () => {
-        _isOnline = false;
-        updateBadge('syncing', 'Reconnexion...');
-      };
-    } catch (err) {
-      console.warn('[CloudSync] Erreur création SSE:', err);
-      updateBadge('offline', 'Hors ligne');
-    }
-  }
-
-  /* ---- 4. Rattrapage d'historique (Polling) ---- */
-  async function _pollCatchUp() {
-    try {
-      const sinceParam = _lastProcessedTime ? (_lastProcessedTime + 1) : '12h';
-      const pollUrl = `${_config.server}/${_config.topic}/json?poll=1&since=${sinceParam}`;
-
-      const res = await fetch(pollUrl, { cache: 'no-store' });
-      if (!res.ok) return;
-
-      const text = await res.text();
-      if (!text.trim()) return;
-
-      // ntfy renvoie des lignes JSON distinctes
-      const lines = text.split('\n');
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const raw = JSON.parse(line);
-          if (raw.attachment && raw.attachment.url) {
-            try {
-              const fileRes = await fetch(raw.attachment.url);
-              const payload = await fileRes.json();
-              _handleIncomingPayload(payload, raw.time);
-              continue;
-            } catch (fe) {}
-          }
-          if (raw.event === 'message' && raw.message) {
-            const payload = JSON.parse(raw.message);
-            _handleIncomingPayload(payload, raw.time);
-          }
-        } catch (e) {}
-      }
-    } catch (e) {
-      // Ignoré en arrière-plan
-    }
-  }
-
-  /* ---- 5. Traitement des données entrantes ---- */
-  function _handleIncomingPayload(payload, eventTime) {
-    if (!payload || typeof payload !== 'object') return;
-    if (eventTime && eventTime > _lastProcessedTime) {
-      _lastProcessedTime = eventTime;
-    }
-
-    // Éviter de traiter nos propres messages envoyés
-    if (payload.sender === _clientId) return;
-
-    // A. Demande de synchronisation complète par un nouvel appareil
-    if (payload.type === 'REQUEST_FULL_SYNC') {
-      // Un autre appareil (PC ou téléphone) vient de s'ouvrir et demande les données actuelles
-      setTimeout(() => {
-        pushAllData(true);
-      }, 500);
+    if (typeof Paho === 'undefined' || !Paho.MQTT) {
+      console.warn('[CloudSync] Bibliothèque Paho MQTT non chargée.');
+      updateBadge('offline', 'MQTT indisponible');
+      _isConnecting = false;
       return;
     }
 
-    // B. Réception de données (SYNC_UPDATE ou FULL_SYNC)
-    if (payload.type === 'SYNC_UPDATE' || payload.type === 'FULL_SYNC') {
-      const { newMissionsCount, updatedMatricules } = _mergeRemoteData(payload);
+    const broker = BROKERS[_currentBrokerIdx];
+    updateBadge('syncing', `Connexion (${broker.name})...`);
 
-      if (newMissionsCount > 0) {
-        const matText = updatedMatricules.length > 0 ? ` (Matricule: ${updatedMatricules.join(', ')})` : '';
-        if (typeof App !== 'undefined' && App.showToast) {
-          App.showToast(
-            'Synchronisation Mobile ↔ PC',
-            `+${newMissionsCount} ordre(s) de mission reçu(s) en direct${matText} !`,
-            'success'
-          );
+    try {
+      if (_client) {
+        try { _client.disconnect(); } catch (e) {}
+        _client = null;
+      }
+
+      _client = new Paho.MQTT.Client(broker.host, broker.port, broker.path, _clientId);
+
+      _client.onConnectionLost = (resp) => {
+        _isConnected = false;
+        _isConnecting = false;
+        console.warn(`[CloudSync] Connexion perdue (${broker.name}):`, resp.errorMessage);
+        updateBadge('syncing', 'Reconnexion...');
+        _scheduleReconnect();
+      };
+
+      _client.onMessageArrived = (message) => {
+        try {
+          const payload = JSON.parse(message.payloadString);
+          _handleMessage(message.destinationName, payload);
+        } catch (err) {
+          console.warn('[CloudSync] Message non JSON reçu:', err);
         }
-      }
+      };
 
-      const total = (typeof Missions !== 'undefined') ? Missions.getAll().length : 0;
-      updateBadge('online', `En direct (${total} OM)`);
-    }
+      _client.connect({
+        useSSL: true,
+        timeout: 5,
+        keepAliveInterval: 30,
+        cleanSession: true,
+        onSuccess: () => {
+          _isConnected = true;
+          _isConnecting = false;
+          console.log(`[CloudSync] Connecté avec succès à ${broker.name}`);
 
-    // C. Réception d'un PING de test
-    if (payload.type === 'TEST_PING') {
-      if (typeof App !== 'undefined' && App.showToast) {
-        App.showToast('Test Cloud Réussi', `Signal reçu depuis un autre appareil !`, 'info');
-      }
+          const total = (typeof Missions !== 'undefined') ? Missions.getAll().length : 0;
+          updateBadge('online', `En direct (${total} OM)`);
+
+          // S'abonner aux topics du canal
+          _subscribeTopics();
+
+          // Diffuser l'état initial local pour synchroniser les données existantes
+          setTimeout(() => {
+            _broadcastFullState();
+          }, 1200);
+        },
+        onFailure: (err) => {
+          _isConnected = false;
+          _isConnecting = false;
+          console.warn(`[CloudSync] Échec connexion ${broker.name}:`, err.errorMessage || err);
+
+          // Basculer vers l'autre broker
+          _currentBrokerIdx = (_currentBrokerIdx + 1) % BROKERS.length;
+          _scheduleReconnect();
+        }
+      });
+    } catch (ex) {
+      _isConnected = false;
+      _isConnecting = false;
+      console.warn('[CloudSync] Erreur client MQTT:', ex);
+      _scheduleReconnect();
     }
   }
 
-  /* ---- 6. Fusion intelligente des données reçues ---- */
-  function _mergeRemoteData(payload) {
-    let hasChanges = false;
-    let newMissionsCount = 0;
-    const updatedMatricules = [];
+  function _scheduleReconnect() {
+    if (_reconnectTimer) clearTimeout(_reconnectTimer);
+    _reconnectTimer = setTimeout(() => {
+      _connect();
+    }, 3000);
+  }
 
-    // 1. Missions
-    if (Array.isArray(payload.missions) && typeof Missions !== 'undefined') {
+  function _subscribeTopics() {
+    if (!_client || !_isConnected) return;
+
+    // S'abonner au topic d'état (Retained) et au topic d'actions (Deltas)
+    const base = _config.channel;
+    _client.subscribe(`${base}/missions/#`, { qos: 1 });
+  }
+
+  /* ---- 5. Publication d'un message MQTT ---- */
+  function _publish(topic, payload, retained = false) {
+    if (!_client || !_isConnected) {
+      console.warn('[CloudSync] Impossible de publier : non connecté');
+      return false;
+    }
+
+    try {
+      const msg = new Paho.MQTT.Message(JSON.stringify(payload));
+      msg.destinationName = topic;
+      msg.qos = 1;
+      msg.retained = retained;
+      _client.send(msg);
+      return true;
+    } catch (e) {
+      console.warn('[CloudSync] Erreur publication:', e);
+      return false;
+    }
+  }
+
+  /* ---- 6. Traitement des messages reçus ---- */
+  function _handleMessage(topic, payload) {
+    if (!payload || typeof payload !== 'object') return;
+
+    // Ignorer ses propres messages pour éviter les boucles
+    if (payload.sender === _clientId) return;
+
+    // A. Événement Delta : MISSION_SAVED (Création ou Modification)
+    if (payload.type === 'MISSION_SAVED' && payload.mission) {
+      _applyMissionSaved(payload.mission);
+      return;
+    }
+
+    // B. Événement Delta : MISSION_DELETED (Suppression)
+    if (payload.type === 'MISSION_DELETED' && payload.missionId) {
+      _applyMissionDeleted(payload.missionId);
+      return;
+    }
+
+    // C. Événement Delta : USER_SAVED
+    if (payload.type === 'USER_SAVED' && payload.user) {
+      _applyUserSaved(payload.user);
+      return;
+    }
+
+    // D. Événement Delta : USER_DELETED
+    if (payload.type === 'USER_DELETED' && payload.userId) {
+      _applyUserDeleted(payload.userId);
+      return;
+    }
+
+    // E. Événement Snapshot complet : SYNC_STATE (Retenu sur le broker)
+    if (payload.type === 'SYNC_STATE') {
+      _applyFullState(payload);
+      return;
+    }
+
+    // F. Événement PING de test
+    if (payload.type === 'PING') {
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('Signal Reçu', 'Appareil connecté en direct !', 'info');
+      }
+      return;
+    }
+  }
+
+  /* ---- 7. Application des modifications locales & UI ---- */
+
+  function _applyMissionSaved(remoteMission) {
+    if (!remoteMission || !remoteMission.id || typeof Missions === 'undefined') return;
+
+    const deletedIds = _getDeletedIds();
+    if (deletedIds.includes(remoteMission.id)) return; // Mission supprimée localement
+
+    const localMissions = Missions.getAll();
+    const idx = localMissions.findIndex(m => m.id === remoteMission.id);
+    let isNew = false;
+
+    if (idx === -1) {
+      localMissions.push(remoteMission);
+      isNew = true;
+    } else {
+      const localTime = new Date(localMissions[idx].updatedAt || localMissions[idx].createdAt || 0).getTime();
+      const remoteTime = new Date(remoteMission.updatedAt || remoteMission.createdAt || 0).getTime();
+      if (remoteTime >= localTime) {
+        localMissions[idx] = { ...localMissions[idx], ...remoteMission };
+      }
+    }
+
+    localStorage.setItem('ordre_mission_missions', JSON.stringify(localMissions));
+    _refreshViews();
+
+    const total = localMissions.length;
+    updateBadge('online', `En direct (${total} OM)`);
+
+    if (typeof App !== 'undefined' && App.showToast) {
+      const matricule = remoteMission.agent?.matricule || '';
+      const num = remoteMission.numero || 'Ordre';
+      const titre = isNew ? 'Nouvel Ordre Reçu' : 'Ordre Mis à Jour';
+      App.showToast(titre, `${num} (${matricule}) synchronisé en direct !`, 'success');
+    }
+  }
+
+  function _applyMissionDeleted(missionId) {
+    if (!missionId || typeof Missions === 'undefined') return;
+
+    _addDeletedId(missionId);
+
+    const localMissions = Missions.getAll().filter(m => m.id !== missionId);
+    localStorage.setItem('ordre_mission_missions', JSON.stringify(localMissions));
+    _refreshViews();
+
+    const total = localMissions.length;
+    updateBadge('online', `En direct (${total} OM)`);
+
+    if (typeof App !== 'undefined' && App.showToast) {
+      App.showToast('Synchronisation', 'Ordre de mission supprimé sur un autre appareil.', 'info');
+    }
+  }
+
+  function _applyUserSaved(remoteUser) {
+    if (!remoteUser || !remoteUser.id || typeof Users === 'undefined') return;
+
+    const localUsers = Users.getAll();
+    const idx = localUsers.findIndex(u => u.id === remoteUser.id);
+    if (idx === -1) {
+      localUsers.push(remoteUser);
+    } else {
+      localUsers[idx] = { ...localUsers[idx], ...remoteUser };
+    }
+
+    localStorage.setItem('ordre_mission_users', JSON.stringify(localUsers));
+    const sel = document.getElementById('active-agent-select');
+    if (sel) Users.populateDropdown(sel);
+    if (typeof Users.renderList === 'function') Users.renderList();
+  }
+
+  function _applyUserDeleted(userId) {
+    if (!userId || typeof Users === 'undefined') return;
+
+    const localUsers = Users.getAll().filter(u => u.id !== userId);
+    localStorage.setItem('ordre_mission_users', JSON.stringify(localUsers));
+    const sel = document.getElementById('active-agent-select');
+    if (sel) Users.populateDropdown(sel);
+    if (typeof Users.renderList === 'function') Users.renderList();
+  }
+
+  function _applyFullState(state) {
+    if (!state) return;
+    let changes = false;
+
+    // 1. Fusionner les missions
+    if (Array.isArray(state.missions) && typeof Missions === 'undefined') return;
+    if (Array.isArray(state.missions)) {
+      const deletedIds = _getDeletedIds();
+      // Enregistrer aussi les deletedIds distants
+      if (Array.isArray(state.deletedIds)) {
+        state.deletedIds.forEach(id => _addDeletedId(id));
+      }
+
       const localMissions = Missions.getAll();
       const localMap = new Map(localMissions.map(m => [m.id, m]));
 
-      payload.missions.forEach(rm => {
-        if (!rm || !rm.id) return;
-        const existing = localMap.get(rm.id);
+      // Supprimer les missions qui figurent dans les tombstones
+      deletedIds.forEach(did => {
+        if (localMap.has(did)) {
+          localMap.delete(did);
+          changes = true;
+        }
+      });
 
-        if (!existing) {
+      state.missions.forEach(rm => {
+        if (!rm || !rm.id || deletedIds.includes(rm.id)) return;
+        const local = localMap.get(rm.id);
+        if (!local) {
           localMap.set(rm.id, rm);
-          newMissionsCount++;
-          hasChanges = true;
-          const mat = rm.agent?.matricule;
-          if (mat && !updatedMatricules.includes(mat)) updatedMatricules.push(mat);
+          changes = true;
         } else {
-          // Si distant est plus récent que local
-          const remoteTime = new Date(rm.updatedAt || rm.createdAt || 0).getTime();
-          const localTime = new Date(existing.updatedAt || existing.createdAt || 0).getTime();
-          if (remoteTime > localTime) {
+          const lTime = new Date(local.updatedAt || local.createdAt || 0).getTime();
+          const rTime = new Date(rm.updatedAt || rm.createdAt || 0).getTime();
+          if (rTime > lTime) {
             localMap.set(rm.id, rm);
-            hasChanges = true;
+            changes = true;
           }
         }
       });
 
-      if (hasChanges) {
+      if (changes) {
         localStorage.setItem('ordre_mission_missions', JSON.stringify(Array.from(localMap.values())));
       }
     }
 
-    // 2. Agents (Users)
-    if (Array.isArray(payload.users) && typeof Users !== 'undefined') {
+    // 2. Fusionner les agents
+    if (Array.isArray(state.users) && typeof Users !== 'undefined') {
       const localUsers = Users.getAll();
-      const localMap = new Map(localUsers.map(u => [u.id, u]));
-      let usersChanged = false;
+      const userMap = new Map(localUsers.map(u => [u.id, u]));
+      let userChanges = false;
 
-      payload.users.forEach(ru => {
+      state.users.forEach(ru => {
         if (!ru || !ru.id) return;
-        if (!localMap.has(ru.id)) {
-          localMap.set(ru.id, ru);
-          usersChanged = true;
+        if (!userMap.has(ru.id)) {
+          userMap.set(ru.id, ru);
+          userChanges = true;
         }
       });
 
-      if (usersChanged) {
-        hasChanges = true;
-        localStorage.setItem('ordre_mission_users', JSON.stringify(Array.from(localMap.values())));
+      if (userChanges) {
+        localStorage.setItem('ordre_mission_users', JSON.stringify(Array.from(userMap.values())));
         const sel = document.getElementById('active-agent-select');
         if (sel) Users.populateDropdown(sel);
+        if (typeof Users.renderList === 'function') Users.renderList();
       }
     }
 
-    // 3. Rafraîchir les composants de l'interface
-    if (hasChanges) {
-      if (typeof History !== 'undefined' && typeof History.render === 'function') {
-        History.render();
-      }
-      if (typeof Dashboard !== 'undefined' && typeof Dashboard.render === 'function') {
-        Dashboard.render();
-      }
-      if (typeof Users !== 'undefined' && typeof Users.renderList === 'function') {
-        Users.renderList();
-      }
+    if (changes) {
+      _refreshViews();
     }
 
-    return { newMissionsCount, updatedMatricules };
+    const total = (typeof Missions !== 'undefined') ? Missions.getAll().length : 0;
+    updateBadge('online', `En direct (${total} OM)`);
   }
 
-  /* ---- 7. Publication d'un message vers le Cloud ---- */
-  async function _publish(payload) {
-    if (_isSending) return;
-    _isSending = true;
-
-    try {
-      updateBadge('syncing', 'Envoi en cours...');
-
-      const postUrl = `${_config.server}/${_config.topic}`;
-      const res = await fetch(postUrl, {
-        method: 'POST',
-        headers: {
-          'Title': 'SRM TTA Sync'
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (res.ok) {
-        _isOnline = true;
-        const total = (typeof Missions !== 'undefined') ? Missions.getAll().length : 0;
-        updateBadge('online', `En direct (${total} OM)`);
-      } else {
-        updateBadge('offline', 'Erreur envoi');
-      }
-    } catch (err) {
-      console.warn('[CloudSync] Erreur publication:', err);
-      updateBadge('offline', 'Erreur réseau');
-    } finally {
-      _isSending = false;
+  function _refreshViews() {
+    if (typeof History !== 'undefined' && typeof History.render === 'function') {
+      History.render();
+    }
+    if (typeof Dashboard !== 'undefined' && typeof Dashboard.render === 'function') {
+      Dashboard.render();
+    }
+    if (typeof Users !== 'undefined' && typeof Users.renderList === 'function') {
+      Users.renderList();
     }
   }
 
-  /* ---- 8. Action appelée lors d'une modification locale ---- */
-  function onLocalChange() {
-    pushAllData(false);
-  }
-
-  /* ---- 9. Envoi complet des données locales ---- */
-  function pushAllData(isFullSync = false) {
+  /* ---- 8. Diffusion de l'état complet (Retained) ---- */
+  function _broadcastFullState() {
     const missions = (typeof Missions !== 'undefined') ? Missions.getAll() : [];
     const users = (typeof Users !== 'undefined') ? Users.getAll() : [];
+    const deletedIds = _getDeletedIds();
 
     const payload = {
-      type: isFullSync ? 'FULL_SYNC' : 'SYNC_UPDATE',
+      type: 'SYNC_STATE',
       sender: _clientId,
       timestamp: Date.now(),
       missions: missions,
-      users: users
+      users: users,
+      deletedIds: deletedIds
     };
 
-    _publish(payload);
-
-    // Optionnel : sauvegarde Firebase si renseignée
-    if (_config.firebaseUrl) {
-      _syncWithFirebase(payload);
-    }
+    // Publier avec retained = true sur le topic d'état
+    _publish(_getStateTopic(), payload, true);
   }
 
-  /* ---- 10. Option Firebase Realtime Database (si configurée) ---- */
-  async function _syncWithFirebase(payload) {
-    let url = _config.firebaseUrl.trim().replace(/\/+$/, '');
-    if (!url.endsWith('.json')) url += '/srm_data.json';
-
-    try {
-      await fetch(url, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      console.warn('[CloudSync] Erreur Firebase:', e);
-    }
+  function _debouncedBroadcastFullState() {
+    if (_stateDebounceTimer) clearTimeout(_stateDebounceTimer);
+    _stateDebounceTimer = setTimeout(() => {
+      _broadcastFullState();
+    }, 600);
   }
 
-  /* ---- 11. Modal de gestion et test ---- */
+  /* ---- 9. Hooks appelés lors des modifications locales ---- */
+
+  function onMissionSaved(missionData) {
+    if (!missionData) return;
+
+    // A. Émettre le delta immédiatement pour que l'autre appareil l'ait en < 30ms
+    _publish(_getDeltaTopic(), {
+      type: 'MISSION_SAVED',
+      sender: _clientId,
+      mission: missionData,
+      timestamp: Date.now()
+    }, false);
+
+    // B. Mettre à jour l'état complet retenu sur le serveur
+    _debouncedBroadcastFullState();
+  }
+
+  function onMissionDeleted(missionId) {
+    if (!missionId) return;
+
+    _addDeletedId(missionId);
+
+    // A. Émettre le delta de suppression
+    _publish(_getDeltaTopic(), {
+      type: 'MISSION_DELETED',
+      sender: _clientId,
+      missionId: missionId,
+      timestamp: Date.now()
+    }, false);
+
+    // B. Mettre à jour l'état retenu
+    _debouncedBroadcastFullState();
+  }
+
+  function onUserSaved(userData) {
+    if (!userData) return;
+    _publish(_getDeltaTopic(), {
+      type: 'USER_SAVED',
+      sender: _clientId,
+      user: userData,
+      timestamp: Date.now()
+    }, false);
+    _debouncedBroadcastFullState();
+  }
+
+  function onUserDeleted(userId) {
+    if (!userId) return;
+    _publish(_getDeltaTopic(), {
+      type: 'USER_DELETED',
+      sender: _clientId,
+      userId: userId,
+      timestamp: Date.now()
+    }, false);
+    _debouncedBroadcastFullState();
+  }
+
+  function onLocalChange() {
+    _debouncedBroadcastFullState();
+  }
+
+  /* ---- 10. Modale de gestion et test ---- */
   function openConfigModal() {
     let modal = document.getElementById('cloud-config-modal');
     if (!modal) {
+      const broker = BROKERS[_currentBrokerIdx];
       const modalHtml = `
       <div class="modal-overlay" id="cloud-config-modal">
         <div class="modal-box" style="max-width:540px;">
           <div class="modal-header">
-            <h3><i class="fa-solid fa-cloud-arrow-up"></i> Synchronisation PC ↔ Portable</h3>
+            <h3><i class="fa-solid fa-bolt" style="color:#27ae60;"></i> Synchronisation Temps Réel</h3>
             <button class="modal-close" onclick="CloudSync.closeConfigModal()">&times;</button>
           </div>
           <div class="modal-body" style="padding:18px 20px;">
             <div style="background:#eafaf1;border:1px solid #a9dfbf;border-radius:8px;padding:12px 14px;margin-bottom:15px;display:flex;align-items:center;gap:12px;">
               <i class="fa-solid fa-circle-check" style="font-size:1.6rem;color:#27ae60;"></i>
               <div>
-                <strong style="color:#196f3d;font-size:0.95rem;">Synchronisation Cloud Automatique Active</strong>
+                <strong style="color:#196f3d;font-size:0.95rem;">Connexion Directe Ultra-Rapide Active</strong>
                 <p style="margin:2px 0 0 0;font-size:0.8rem;color:#2c3e50;">
-                  Tout ordre de mission créé sur téléphone ou PC apparaît automatiquement et instantanément sur tous vos appareils.
+                  Protocole WebSockets sécurisé (WSS). Tout ajout, modification ou suppression sur PC ou portable se reflète en moins d'une seconde sur l'autre appareil.
                 </p>
               </div>
             </div>
 
             <div class="form-group" style="margin-bottom:14px;">
-              <label class="form-label" style="font-weight:700;">Canal partagé (Équipe SRM TTA) :</label>
-              <input type="text" id="cfg-topic-id" class="form-control" value="${_config.topic}" placeholder="${DEFAULT_TOPIC}" />
-              <small style="color:var(--text-muted);font-size:0.75rem;">Tous vos téléphones et PC utilisant ce même canal sont automatiquement reliés en direct.</small>
-            </div>
-
-            <div class="form-group" style="margin-bottom:14px;">
-              <label class="form-label" style="font-weight:700;">Base Firebase de secours (Optionnelle) :</label>
-              <input type="url" id="cfg-firebase-url" class="form-control" value="${_config.firebaseUrl}" placeholder="https://votre-projet.firebaseio.com" />
-              <small style="color:var(--text-muted);font-size:0.75rem;">Optionnel. Laissez vide si vous utilisez le Cloud instantané standard.</small>
+              <label class="form-label" style="font-weight:700;">Canal de l'équipe SRM TTA :</label>
+              <input type="text" id="cfg-topic-id" class="form-control" value="${_config.channel}" placeholder="srm_tta_ouezzane_2026" />
+              <small style="color:var(--text-muted);font-size:0.75rem;">Tous vos téléphones et PC utilisant ce même canal sont automatiquement reliés.</small>
             </div>
 
             <div style="background:#f8f9fa;border:1px solid #e9ecef;border-radius:6px;padding:12px;margin-top:10px;">
               <div style="font-weight:700;font-size:0.85rem;color:#1a5276;margin-bottom:6px;">
-                <i class="fa-solid fa-bolt"></i> Actions de synchronisation :
+                <i class="fa-solid fa-server"></i> Serveur actif : <span style="color:#27ae60;" id="cfg-broker-name">${broker.name}</span>
               </div>
               <div style="display:flex;gap:10px;flex-wrap:wrap;">
                 <button type="button" class="btn btn-secondary btn-sm" onclick="CloudSync.testSync()">
                   <i class="fa-solid fa-paper-plane"></i> Tester la connexion
                 </button>
-                <button type="button" class="btn btn-outline btn-sm" onclick="CloudSync.pushAllData(true)">
+                <button type="button" class="btn btn-outline btn-sm" onclick="CloudSync.forcePushAll()">
                   <i class="fa-solid fa-arrows-rotate"></i> Forcer l'envoi de toutes mes données
                 </button>
               </div>
@@ -411,103 +572,63 @@ const CloudSync = (() => {
 
   function saveConfigFromModal() {
     const topicInput = document.getElementById('cfg-topic-id');
-    const fbInput = document.getElementById('cfg-firebase-url');
-
     if (topicInput && topicInput.value.trim()) {
-      _config.topic = topicInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
-    }
-    if (fbInput) {
-      _config.firebaseUrl = fbInput.value.trim();
+      _config.channel = topicInput.value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
     }
 
     saveConfig();
     closeConfigModal();
 
     if (typeof App !== 'undefined' && App.showToast) {
-      App.showToast('Configuration enregistrée', 'Reconnexion au canal Cloud...', 'success');
+      App.showToast('Configuration enregistrée', 'Reconnexion au canal...', 'success');
     }
 
     init();
   }
 
-  async function testSync() {
-    updateBadge('syncing', 'Test envoi...');
-    await _publish({
-      type: 'TEST_PING',
+  function testSync() {
+    if (!_isConnected) {
+      if (typeof App !== 'undefined' && App.showToast) {
+        App.showToast('Connexion en cours', 'Veuillez patienter pendant la connexion au serveur...', 'warning');
+      }
+      return;
+    }
+
+    _publish(_getDeltaTopic(), {
+      type: 'PING',
       sender: _clientId,
       time: Date.now()
-    });
+    }, false);
 
     if (typeof App !== 'undefined' && App.showToast) {
-      App.showToast('Test Cloud', 'Signal de synchronisation transmis avec succès sur le Cloud !', 'success');
+      App.showToast('Test Réussi', 'Signal de synchronisation émis en direct sur le Cloud !', 'success');
     }
   }
 
-  async function _fetchFromFirebase() {
-    if (!_config.firebaseUrl) return;
-    let url = _config.firebaseUrl.trim().replace(/\/+$/, '');
-    if (!url.endsWith('.json')) url += '/srm_data.json';
-
-    try {
-      const res = await fetch(url + '?t=' + Date.now());
-      if (res.ok) {
-        const data = await res.json();
-        if (data) {
-          _mergeRemoteData(data);
-          const total = (typeof Missions !== 'undefined') ? Missions.getAll().length : 0;
-          updateBadge('online', `En direct (${total} OM)`);
-        }
-      }
-    } catch (e) {
-      console.warn('[CloudSync] Erreur lecture Firebase:', e);
+  function forcePushAll() {
+    _broadcastFullState();
+    if (typeof App !== 'undefined' && App.showToast) {
+      App.showToast('Synchronisation Complète', 'Toutes les données locales ont été diffusées sur le Cloud !', 'success');
     }
   }
 
-  /* ---- 12. Initialisation générale ---- */
+  /* ---- 11. Initialisation générale ---- */
   function init() {
     loadConfig();
-
-    updateBadge('syncing', 'Connexion Cloud...');
-
-    // 0. Si Firebase est configuré, récupérer d'abord depuis Firebase
-    if (_config.firebaseUrl) {
-      _fetchFromFirebase();
-    }
-
-    // 1. Connecter le flux Server-Sent Events (SSE) pour le temps réel
-    _connectSSE();
-
-    // 2. Récupérer immédiatement l'historique des dernières heures
-    _pollCatchUp();
-
-    // 3. Diffuser nos données locales ou demander une synchronisation
-    setTimeout(() => {
-      const localMissions = (typeof Missions !== 'undefined') ? Missions.getAll() : [];
-      if (localMissions.length > 0) {
-        pushAllData(false);
-      } else {
-        _publish({
-          type: 'REQUEST_FULL_SYNC',
-          sender: _clientId
-        });
-      }
-    }, 1500);
-
-    // 4. Polling périodique de rattrapage toutes les 15 secondes
-    if (_pollInterval) clearInterval(_pollInterval);
-    _pollInterval = setInterval(() => {
-      _pollCatchUp();
-      if (_config.firebaseUrl) _fetchFromFirebase();
-    }, 15000);
+    _connect();
   }
 
   return {
     init,
     onLocalChange,
-    pushAllData,
+    onMissionSaved,
+    onMissionDeleted,
+    onUserSaved,
+    onUserDeleted,
     openConfigModal,
     closeConfigModal,
     saveConfigFromModal,
-    testSync
+    testSync,
+    forcePushAll
   };
 })();

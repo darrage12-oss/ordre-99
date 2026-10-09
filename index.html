@@ -81,6 +81,18 @@
       <div class="topbar-title" id="topbar-title">Tableau de bord</div>
 
       <div class="topbar-right">
+        <!-- Espace Session Agent / Personnel & Déconnexion -->
+        <div id="user-session-wrap" class="user-session-badge" style="display:none;">
+          <div class="session-info">
+            <span id="session-user-role"><span class="badge-role agent"><i class="fa-solid fa-id-badge"></i> Personnel</span></span>
+            <strong id="session-user-matricule" class="session-mat">--</strong>
+            <span id="session-user-name" class="session-nom"></span>
+          </div>
+          <button type="button" class="btn-session-action btn-logout" title="Déconnexion" onclick="Auth.logout()">
+            <i class="fa-solid fa-right-from-bracket"></i>
+          </button>
+        </div>
+
         <div class="agent-select-wrap">
           <label for="active-agent-select"><i class="fa-solid fa-id-card"></i> Matricule :</label>
           <select id="active-agent-select" class="topbar-agent-select">
@@ -152,7 +164,7 @@
             <canvas id="chart-monthly" height="220"></canvas>
           </div>
           <div class="chart-card">
-            <h3><i class="fa-solid fa-ranking-star"></i> Top 5 agents</h3>
+            <h3 id="dash-chart-agents-title"><i class="fa-solid fa-ranking-star"></i> Top 5 agents</h3>
             <canvas id="chart-agents" height="220"></canvas>
           </div>
         </div>
@@ -447,6 +459,33 @@
 
     </main><!-- end #view-container -->
   </div><!-- end #main-wrap -->
+
+  <!-- =====================================================================
+       BARRE DE NAVIGATION MOBILE PROFESSIONNELLE (Format Téléphone Ergonomique)
+       ===================================================================== -->
+  <nav id="mobile-bottom-nav" class="mobile-bottom-nav">
+    <button type="button" class="mob-nav-btn active" data-view="dashboard">
+      <i class="fa-solid fa-chart-column"></i>
+      <span>Tableau</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="create">
+      <i class="fa-solid fa-circle-plus"></i>
+      <span>Nouveau</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="history">
+      <i class="fa-solid fa-calendar-check"></i>
+      <span>Historique</span>
+    </button>
+    <button type="button" class="mob-nav-btn" data-view="agents" id="mob-nav-agents-btn">
+      <i class="fa-solid fa-user-circle"></i>
+      <span id="mob-nav-agents-label">Mon Profil</span>
+    </button>
+    <button type="button" class="mob-nav-btn btn-mob-logout" onclick="Auth.logout()" title="Déconnexion">
+      <i class="fa-solid fa-arrow-right-from-bracket"></i>
+      <span>Quitter</span>
+    </button>
+  </nav>
+
 </div><!-- end #app-shell -->
 
 <!-- =====================================================================
@@ -506,6 +545,42 @@
             <input type="text" id="af-province" class="form-control" placeholder="Ex: OUEZZANE" />
           </div>
         </div>
+
+        <!-- Section Sécurité & Accès (Admin) -->
+        <div style="margin:16px 0 10px;padding-top:12px;border-top:1px dashed var(--border);font-size:0.86rem;font-weight:700;color:var(--primary);display:flex;align-items:center;gap:8px;">
+          <i class="fa-solid fa-shield-halved"></i> Identifiants & Sécurité (Gestion Administrateur)
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700;color:#c0392b;">
+              <i class="fa-solid fa-envelope"></i> Email Gmail de récupération <span style="color:var(--danger)">*</span>
+            </label>
+            <input type="email" id="af-email" class="form-control" placeholder="agent@gmail.com" required />
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-weight:700;color:var(--primary);">
+              <i class="fa-solid fa-key"></i> Mot de passe de connexion <span style="color:var(--danger)">*</span>
+            </label>
+            <div style="position:relative;">
+              <input type="text" id="af-password" class="form-control" placeholder="Mot de passe" required />
+              <button type="button" class="btn-toggle-pass" onclick="Users.togglePassVisibility('af-password')" title="Afficher/Masquer">
+                <i class="fa-solid fa-eye-slash" id="af-pass-eye"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row" id="af-role-wrap">
+          <div class="form-group full">
+            <label class="form-label"><i class="fa-solid fa-user-gear"></i> Rôle & Droits d'accès :</label>
+            <select id="af-role" class="form-control">
+              <option value="agent">👤 Personnel / Agent (Historique personnel uniquement)</option>
+              <option value="admin">🛡️ Administrateur SRM (Accès total, gestion agents & missions)</option>
+            </select>
+          </div>
+        </div>
+
         <input type="hidden" id="af-edit-id" value="" />
       </form>
     </div>
@@ -634,14 +709,16 @@
 <script src="js/html2pdf.bundle.min.js"></script>
 <script src="js/demo_data.js"></script>
 <script src="js/users.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/missions.js"></script>
 <script src="js/history.js"></script>
 <script src="js/dashboard.js"></script>
 <script src="js/pdf.js"></script>
 <script src="js/app.js"></script>
+<script src="js/paho-mqtt.min.js"></script>
 <script src="js/cloud_sync.js"></script>
 
-<!-- Initialisation automatique de la date actuelle, horaires par défaut et CloudSync -->
+<!-- Initialisation automatique de la date actuelle, horaires par défaut, Auth et CloudSync -->
 <script>
 (function() {
   function setDefaultDatesAndTimes() {
@@ -671,9 +748,32 @@
   // Au chargement initial
   document.addEventListener('DOMContentLoaded', () => {
     setDefaultDatesAndTimes();
+    if (typeof Auth !== 'undefined') {
+      Auth.init();
+    }
     if (typeof CloudSync !== 'undefined') {
       CloudSync.init();
     }
+
+    // Gestion de la barre de navigation mobile tactile
+    document.addEventListener('click', (e) => {
+      const mobBtn = e.target.closest('.mob-nav-btn[data-view]');
+      if (mobBtn && typeof App !== 'undefined') {
+        const view = mobBtn.dataset.view;
+        App.switchView(view);
+        document.querySelectorAll('.mob-nav-btn[data-view]').forEach(b => {
+          b.classList.toggle('active', b.dataset.view === view);
+        });
+      }
+      // Si la vue change depuis la sidebar, synchroniser la barre mobile
+      const sideBtn = e.target.closest('.nav-item[data-view]');
+      if (sideBtn) {
+        const view = sideBtn.dataset.view;
+        document.querySelectorAll('.mob-nav-btn[data-view]').forEach(b => {
+          b.classList.toggle('active', b.dataset.view === view);
+        });
+      }
+    });
 
     // Synchronisation automatique : quand la Date de départ change,
     // "Fait le" s'aligne automatiquement dessus (tout en restant modifiable librement)

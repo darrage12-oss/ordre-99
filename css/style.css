@@ -1776,3 +1776,290 @@ body.dark-mode .no-agent-warning {
   from { opacity: 0.5; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1.1); }
 }
+
+/* ==========================================================================
+   AUTHENTIFICATION, COMPTE PERSONNEL & SÉCURITÉ GMAIL
+   ========================================================================== */
+.auth-overlay {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  z-index: 99999;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(8px);
+}
+
+.auth-box {
+  width: 95%;
+  max-width: 480px;
+  background: var(--bg-card);
+  border-radius: 16px;
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  animation: authScaleIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes authScaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.auth-header {
+  padding: 24px 24px 18px;
+  background: linear-gradient(135deg, #1a5276 0%, #2980b9 100%);
+  color: #fff;
+  text-align: center;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.auth-logo {
+  width: 46px;
+  height: 46px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.auth-brand-title {
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+}
+
+.auth-brand-sub {
+  font-size: 0.78rem;
+  opacity: 0.9;
+}
+
+.auth-badge-title {
+  display: inline-block;
+  background: rgba(255, 255, 255, 0.2);
+  padding: 4px 14px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.auth-nav {
+  display: flex;
+  background: rgba(0, 0, 0, 0.04);
+  border-bottom: 1px solid var(--border);
+}
+
+.auth-nav-btn {
+  flex: 1;
+  padding: 12px 6px;
+  background: none;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.auth-nav-btn.active {
+  color: var(--primary);
+  border-bottom-color: var(--primary);
+  background: var(--bg-card);
+}
+
+.auth-body {
+  padding: 22px 24px;
+}
+
+.auth-alert {
+  padding: 10px 14px;
+  margin: 12px 24px 0;
+  border-radius: 8px;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.alert-danger {
+  background: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.alert-success {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.btn-toggle-pass {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+}
+
+.auth-quick-demo {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border);
+}
+
+/* User Session Badge in Topbar */
+.user-session-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(41, 128, 185, 0.12);
+  border: 1px solid rgba(41, 128, 185, 0.35);
+  padding: 4px 10px;
+  border-radius: 20px;
+}
+
+.session-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+
+.session-mat {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.session-nom {
+  color: var(--text-muted);
+  font-size: 0.76rem;
+}
+
+.badge-role {
+  padding: 2px 7px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.badge-role.agent { background: #e0f2fe; color: #0369a1; }
+.badge-role.admin { background: #fee2e2; color: #b91c1c; }
+
+.btn-logout {
+  background: none;
+  border: none;
+  color: #e74c3c;
+  cursor: pointer;
+  padding: 4px 6px;
+  font-size: 0.92rem;
+  transition: transform 0.15s;
+}
+
+.btn-logout:hover { transform: scale(1.15); }
+
+/* ==========================================================================
+   FORMAT MOBILE PROFESSIONNEL & ERGONOMIQUE (Smartphone)
+   ========================================================================== */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Affichage de la barre inférieure fixe (Accessible facilement avec le pouce) */
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.08);
+    z-index: 900;
+    justify-content: space-around;
+    align-items: center;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mob-nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 100%;
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 0.72rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: color 0.15s, transform 0.15s;
+    touch-action: manipulation;
+  }
+
+  .mob-nav-btn i {
+    font-size: 1.15rem;
+  }
+
+  .mob-nav-btn.active {
+    color: var(--primary);
+  }
+
+  .mob-nav-btn.active i {
+    transform: translateY(-2px);
+  }
+
+  .mob-nav-btn.btn-mob-logout {
+    color: #ef4444;
+  }
+
+  /* Espace pour éviter que le contenu ne soit masqué par la barre */
+  #main-wrap {
+    padding-bottom: 72px !important;
+  }
+
+  /* Formulaires confortables sur téléphone (évite le zoom intempestif sur Safari/iPhone) */
+  input.form-control, select.form-control, textarea.form-control {
+    font-size: 16px !important;
+    min-height: 44px;
+  }
+
+  /* Boutons tactiles agrandis */
+  .btn {
+    min-height: 42px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Masquer le hamburger sidebar si la barre inférieure est active */
+  #sidebar-toggle {
+    display: none !important;
+  }
+
+  .topbar-right {
+    gap: 6px;
+  }
+
+  .session-nom {
+    display: none;
+  }
+}
+

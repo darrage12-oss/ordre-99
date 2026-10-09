@@ -1,11 +1,11 @@
-﻿/**
+/**
  * sw.js - Service Worker PWA Ordre de Mission SRM TTA
  * - PrÃ©cache tolÃ©rant : un fichier manquant ne bloque plus l'installation
  * - Network-first : les mises Ã  jour GitHub sont visibles immÃ©diatement
  * - Hors-ligne : repli sur le cache
  * - Les requÃªtes externes (synchronisation Cloud) ne sont jamais interceptÃ©es
  */
-const CACHE_NAME = 'ordre-mission-v6';
+const CACHE_NAME = 'ordre-mission-v10';
 
 const ASSETS_TO_CACHE = [
   './',
@@ -22,11 +22,13 @@ const ASSETS_TO_CACHE = [
   './js/html2pdf.bundle.min.js',
   './js/demo_data.js',
   './js/users.js',
+  './js/auth.js',
   './js/missions.js',
   './js/history.js',
   './js/dashboard.js',
   './js/pdf.js',
   './js/app.js',
+  './js/paho-mqtt.min.js',
   './js/cloud_sync.js'
 ];
 

@@ -1,0 +1,9 @@
+[25560:13680:1009/161707.987:ERROR:ui\gl\direct_composition_support.cc:630] AMD VideoProcessorGetOutputExtension failed: Erreur non spécifiée (0x80004005)
+[20936:12508:1009/161708.178:WARNING:chrome\browser\extensions\external_registry_loader_win.cc:283] Error observing HKLM: 5
+[20936:12508:1009/161708.976:INFO:CONSOLE:231] "[DemoData] Demo data loaded into localStorage.", source: file:///D:/D%20D/.gemini/antigravity/scratch/ordre-mission/Ordre%2099/js/demo_data.js (231)
+[20936:12508:1009/161708.995:INFO:CONSOLE:398] "[App] Ordre de Mission – SRM TTA initialized.", source: file:///D:/D%20D/.gemini/antigravity/scratch/ordre-mission/Ordre%2099/js/app.js (398)
+[20936:12508:1009/161709.071:INFO:CONSOLE:831] "[SW] Échec enregistrement : TypeError: Failed to register a ServiceWorker: The URL protocol of the current origin ('null') is not supported.", source: file:///D:/D%20D/.gemini/antigravity/scratch/ordre-mission/Ordre%2099/index.html (831)
+[20936:12508:1009/161709.076:INFO:CONSOLE:5645] "[ProtocolLaunch] handler constructed; wiring port events.", source: chrome-extension://ndcpkimcihhghdcddljkfmmjccdmcmof/background.rollup.js (5645)
+[20936:12508:1009/161709.749:ERROR:content\browser\network_service_instance_impl.cc:673] Network service crashed or was terminated, restarting service.
+[20936:12508:1009/161709.773:ERROR:chrome\browser\component_updater\edge_optimization_guide_models_manifest_installer.cc:264] Edge LLM: catalog update failed: 5
+[20936:12508:1009/161709.801:INFO:CONSOLE:160] "[CloudSync] Échec connexion EMQX Cloud: AMQJS0007E Socket error:undefined.", source: file:///D:/D%20D/.gemini/antigravity/scratch/ordre-mission/Ordre%2099/js/cloud_sync.js (160)

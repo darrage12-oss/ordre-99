@@ -15,8 +15,10 @@ const Dashboard = (() => {
     const now       = new Date();
     const curY      = now.getFullYear();
     const curM      = now.getMonth();
-    const missions  = Missions.getAll();
+    const missions  = (typeof Missions.getVisibleMissions === 'function') ? Missions.getVisibleMissions() : Missions.getAll();
     const users     = Users.getAll();
+    const isRegular = typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin();
+    const currentUser = (typeof Auth !== 'undefined') ? Auth.getCurrentUser() : null;
 
     const missionsMonth = missions.filter(m => {
       const d = new Date(m.dateDepart);
@@ -31,7 +33,9 @@ const Dashboard = (() => {
       .filter(m => new Date(m.dateDepart).getFullYear() === curY)
       .reduce((s, m) => s + Missions.calcDays(m), 0);
 
-    return { missionsMonth, missionsYear, totalAgents: users.length, joursYear };
+    const totalAgentsVal = isRegular ? (currentUser?.matricule || 'Actif') : users.length;
+
+    return { missionsMonth, missionsYear, totalAgents: totalAgentsVal, joursYear, isRegular };
   }
 
   /* ---- Render stat cards ---- */
@@ -41,6 +45,12 @@ const Dashboard = (() => {
     _setText('dash-missions-year',  stats.missionsYear);
     _setText('dash-agents-total',   stats.totalAgents);
     _setText('dash-jours-total',    stats.joursYear);
+
+    // Ajuster le libellé de la carte agent si personnel
+    const labelAgent = document.querySelector('#dash-stat-cards .stat-card:nth-child(3) .stat-label');
+    if (labelAgent) {
+      labelAgent.textContent = stats.isRegular ? 'Mon Matricule' : 'Agents enregistrés';
+    }
   }
 
   function _setText(id, val) {
@@ -62,7 +72,9 @@ const Dashboard = (() => {
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       labels.push(MONTH_NAMES_SHORT[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2));
-      const count = Missions.getByMonth(d.getFullYear(), d.getMonth()).length;
+      const count = (typeof Missions.getVisibleByMonth === 'function')
+        ? Missions.getVisibleByMonth(d.getFullYear(), d.getMonth()).length
+        : Missions.getByMonth(d.getFullYear(), d.getMonth()).length;
       data.push(count);
     }
 
@@ -149,29 +161,66 @@ const Dashboard = (() => {
     });
   }
 
-  /* ---- Horizontal Bar Chart: Top 5 agents ---- */
+  /* ---- Horizontal Bar Chart: Top 5 agents (Admin) OR Transport Modes (Personnel) ---- */
 
   function drawHorizontalBarChart() {
     const canvas = document.getElementById('chart-agents');
     if (!canvas) return;
 
-    const ctx      = canvas.getContext('2d');
-    const missions = Missions.getAll();
-    const users    = Users.getAll();
+    const ctx       = canvas.getContext('2d');
+    const isRegular = typeof Auth !== 'undefined' && Auth.isLoggedIn() && !Auth.isAdmin();
+    const titleEl   = document.getElementById('dash-chart-agents-title');
 
-    // Count per user
-    const counts = {};
-    missions.forEach(m => {
-      const uid = m.userId || (m.agent && m.agent.id) || 'unknown';
-      counts[uid] = (counts[uid] || 0) + 1;
-    });
+    let entries = [];
 
-    // Build labels
-    const entries = users.map(u => ({
-      label: u.nom.split(' ').slice(-1)[0] || u.nom, // Last name
-      full:  u.nom,
-      count: counts[u.id] || 0
-    })).sort((a, b) => b.count - a.count).slice(0, 5);
+    if (isRegular) {
+      if (titleEl) {
+        titleEl.innerHTML = '<i class="fa-solid fa-car-side"></i> Mes moyens de transport';
+      }
+      const myMissions = (typeof Missions.getVisibleMissions === 'function')
+        ? Missions.getVisibleMissions()
+        : Missions.getAll();
+
+      const counts = {
+        'Véh. Service': 0,
+        'Véh. Personnel': 0,
+        'Covoiturage': 0,
+        'Transport': 0
+      };
+
+      myMissions.forEach(m => {
+        if (m.vehiculeService) counts['Véh. Service']++;
+        if (m.vehiculePerso)   counts['Véh. Personnel']++;
+        if (m.covoiturage)     counts['Covoiturage']++;
+        if (m.transportCommun) counts['Transport']++;
+      });
+
+      entries = Object.keys(counts).map(k => ({
+        label: k,
+        full:  k,
+        count: counts[k]
+      }));
+    } else {
+      if (titleEl) {
+        titleEl.innerHTML = '<i class="fa-solid fa-ranking-star"></i> Top 5 agents';
+      }
+      const missions = Missions.getAll();
+      const users    = Users.getAll();
+
+      // Count per user
+      const counts = {};
+      missions.forEach(m => {
+        const uid = m.userId || (m.agent && m.agent.id) || 'unknown';
+        counts[uid] = (counts[uid] || 0) + 1;
+      });
+
+      // Build labels
+      entries = users.map(u => ({
+        label: u.nom.split(' ').slice(-1)[0] || u.nom, // Last name
+        full:  u.nom,
+        count: counts[u.id] || 0
+      })).sort((a, b) => b.count - a.count).slice(0, 5);
+    }
 
     const dpr  = window.devicePixelRatio || 1;
     const rect = canvas.parentElement.getBoundingClientRect();
@@ -199,7 +248,7 @@ const Dashboard = (() => {
     }
 
     const maxVal  = Math.max(...entries.map(e => e.count), 1);
-    const PAD_L   = 80, PAD_R = 36, PAD_T = 14, PAD_B = 14;
+    const PAD_L   = 85, PAD_R = 36, PAD_T = 14, PAD_B = 14;
     const chartW  = W - PAD_L - PAD_R;
     const rowH    = (H - PAD_T - PAD_B) / entries.length;
     const barH    = rowH * 0.48;
@@ -210,11 +259,11 @@ const Dashboard = (() => {
       const y    = PAD_T + i * rowH + (rowH - barH) / 2;
       const barW = (e.count / maxVal) * chartW;
 
-      // Agent name
+      // Agent or Transport name
       ctx.fillStyle = isDark ? '#dce8f5' : '#1c2833';
       ctx.font = '10px system-ui';
       ctx.textAlign = 'right';
-      ctx.fillText(_truncate(e.label, 12), PAD_L - 6, y + barH / 2 + 4);
+      ctx.fillText(_truncate(e.label, 13), PAD_L - 6, y + barH / 2 + 4);
 
       // Grid line
       ctx.strokeStyle = gridColor;
@@ -266,7 +315,9 @@ const Dashboard = (() => {
     const container = document.getElementById('dash-recent-missions');
     if (!container) return;
 
-    const missions = Missions.getAll().slice(0, 5);
+    const missions = ((typeof Missions.getVisibleMissions === 'function')
+      ? Missions.getVisibleMissions()
+      : Missions.getAll()).slice(0, 5);
 
     if (missions.length === 0) {
       container.innerHTML = `

@@ -53,14 +53,26 @@ const Users = (() => {
       users.push(data);
     }
     _save(users);
-    if (typeof CloudSync !== 'undefined') CloudSync.onLocalChange();
+    if (typeof CloudSync !== 'undefined') {
+      if (typeof CloudSync.onUserSaved === 'function') {
+        CloudSync.onUserSaved(data);
+      } else if (typeof CloudSync.onLocalChange === 'function') {
+        CloudSync.onLocalChange();
+      }
+    }
     return data;
   }
 
   function remove(id) {
     const users = _load().filter(u => u.id !== id);
     _save(users);
-    if (typeof CloudSync !== 'undefined') CloudSync.onLocalChange();
+    if (typeof CloudSync !== 'undefined') {
+      if (typeof CloudSync.onUserDeleted === 'function') {
+        CloudSync.onUserDeleted(id);
+      } else if (typeof CloudSync.onLocalChange === 'function') {
+        CloudSync.onLocalChange();
+      }
+    }
     // Clear active user if deleted
     if (getActiveUserId() === id) {
       localStorage.removeItem(ACTIVE_USER_KEY);
@@ -105,19 +117,28 @@ const Users = (() => {
     const grid = document.getElementById('agents-grid');
     if (!grid) return;
 
-    const users = getAll();
+    const users   = getAll();
+    const isAdmin = typeof Auth !== 'undefined' ? Auth.isAdmin() : true;
+    const curUser = typeof Auth !== 'undefined' ? Auth.getCurrentUser() : null;
 
-    if (users.length === 0) {
+    // Masquer le bouton d'ajout si simple agent
+    const addBtn = document.getElementById('btn-add-agent');
+    if (addBtn) addBtn.style.display = isAdmin ? 'inline-flex' : 'none';
+
+    // Filtrer : les agents simples ne voient que leur propre fiche
+    const displayUsers = (!isAdmin && curUser) ? users.filter(u => u.id === curUser.id) : users;
+
+    if (displayUsers.length === 0) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1">
           <i class="fa-solid fa-users-slash"></i>
-          <p>Aucun agent enregistré</p>
-          <small>Cliquez sur "Ajouter un agent" pour commencer</small>
+          <p>Aucun profil enregistré</p>
+          ${isAdmin ? '<small>Cliquez sur "Ajouter un agent" pour commencer</small>' : ''}
         </div>`;
       return;
     }
 
-    grid.innerHTML = users.map(u => `
+    grid.innerHTML = displayUsers.map(u => `
       <div class="agent-card">
         <div class="agent-card-header">
           <div class="agent-avatar">${_initials(u.nom)}</div>
@@ -156,14 +177,38 @@ const Users = (() => {
             <span class="ai-label">Province :</span>
             <span>${_esc(u.province || '–')}</span>
           </div>
+
+          <!-- Section Sécurité & Mot de passe (Visible pour Admin et sur son propre profil) -->
+          <div class="agent-security-box" style="margin-top:12px;padding:10px 12px;background:rgba(41,128,185,0.06);border:1px solid rgba(41,128,185,0.22);border-radius:8px;">
+            <div style="font-size:0.75rem;font-weight:700;color:var(--primary);margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
+              <span><i class="fa-solid fa-shield-halved"></i> Accès & Sécurité</span>
+              <span class="badge ${u.role === 'admin' ? 'badge-orange' : 'badge-blue'}" style="font-size:0.68rem;">${u.role === 'admin' ? 'Administrateur' : 'Personnel'}</span>
+            </div>
+            <div class="agent-info-row" style="margin-bottom:5px;">
+              <i class="fa-solid fa-envelope" style="color:#e74c3c;"></i>
+              <span class="ai-label">Gmail :</span>
+              <span style="font-weight:600;color:var(--text);word-break:break-all;">${_esc(u.email || 'Non renseigné')}</span>
+            </div>
+            <div class="agent-info-row" style="align-items:center;">
+              <i class="fa-solid fa-key" style="color:#f39c12;"></i>
+              <span class="ai-label">Mot de passe :</span>
+              <span class="agent-pass-box" style="display:inline-flex;align-items:center;gap:6px;">
+                <code id="pass-text-${u.id}" style="background:var(--bg-table-odd);padding:2px 8px;border-radius:4px;font-size:0.9rem;letter-spacing:1px;font-weight:700;color:var(--primary);">••••••••</code>
+                <button type="button" class="btn btn-xs btn-outline" style="padding:2px 7px;" onclick="Users.toggleCardPass('${u.id}', '${_esc(u.password || '1234')}')" title="Afficher/Masquer">
+                  <i class="fa-solid fa-eye" id="pass-eye-${u.id}"></i>
+                </button>
+              </span>
+            </div>
+          </div>
         </div>
         <div class="agent-card-actions">
-          <button class="btn btn-outline btn-sm" onclick="Users.openModal('${u.id}')">
-            <i class="fa-solid fa-pen"></i> Modifier
+          <button class="btn btn-primary btn-sm" onclick="Users.openModal('${u.id}')" title="Modifier l'agent, son mot de passe ou son Gmail">
+            <i class="fa-solid fa-pen-to-square"></i> Modifier (MDP / Gmail)
           </button>
-          <button class="btn btn-danger btn-sm" onclick="Users.confirmDelete('${u.id}')">
+          ${(isAdmin && String(u.matricule).toUpperCase() !== 'ADMIN') ? `
+          <button class="btn btn-danger btn-sm" onclick="Users.confirmDelete('${u.id}')" title="Supprimer cet agent">
             <i class="fa-solid fa-trash-can"></i> Supprimer
-          </button>
+          </button>` : ''}
         </div>
       </div>`).join('');
   }
@@ -174,15 +219,20 @@ const Users = (() => {
     const modal = document.getElementById('agent-modal');
     const form  = document.getElementById('agent-form');
     const title = document.getElementById('agent-modal-title');
+    const isAdmin = typeof Auth !== 'undefined' ? Auth.isAdmin() : true;
 
     // Reset form
     form.reset();
     document.getElementById('af-edit-id').value = '';
 
+    // Gestion du rôle : les simples agents ne peuvent pas changer leur rôle
+    const roleWrap = document.getElementById('af-role-wrap');
+    if (roleWrap) roleWrap.style.display = isAdmin ? 'block' : 'none';
+
     if (userId) {
       const u = getById(userId);
       if (!u) return;
-      title.textContent = 'Modifier l\'agent';
+      title.textContent = 'Modifier l\'agent (Infos, Mot de passe, Gmail)';
       document.getElementById('af-edit-id').value     = u.id;
       document.getElementById('af-nom').value          = u.nom || '';
       document.getElementById('af-matricule').value    = u.matricule || '';
@@ -192,8 +242,14 @@ const Users = (() => {
       document.getElementById('af-division').value     = u.division || '';
       document.getElementById('af-service').value      = u.service || '';
       document.getElementById('af-province').value     = u.province || '';
+      document.getElementById('af-email').value        = u.email || '';
+      document.getElementById('af-password').value     = u.password || '1234';
+      document.getElementById('af-role').value         = u.role || 'agent';
     } else {
-      title.textContent = 'Ajouter un agent';
+      title.textContent = 'Ajouter un agent (Avec accès sécurisé)';
+      document.getElementById('af-email').value        = '';
+      document.getElementById('af-password').value     = '1234';
+      document.getElementById('af-role').value         = 'agent';
     }
 
     App.openModal('agent-modal');
@@ -202,11 +258,26 @@ const Users = (() => {
   /* ---- UI: Save from form ---- */
 
   function saveFromForm() {
-    const nom = document.getElementById('af-nom').value.trim();
-    const mat = document.getElementById('af-matricule').value.trim();
+    const nom   = document.getElementById('af-nom').value.trim();
+    const mat   = document.getElementById('af-matricule').value.trim();
+    const email = document.getElementById('af-email').value.trim();
+    const pass  = document.getElementById('af-password').value.trim();
+    const role  = document.getElementById('af-role').value || 'agent';
 
     if (!nom) {
       App.showToast('Champ requis', 'Le nom de l\'agent est obligatoire.', 'error');
+      return;
+    }
+    if (!mat) {
+      App.showToast('Champ requis', 'Le matricule de l\'agent est obligatoire.', 'error');
+      return;
+    }
+    if (!email) {
+      App.showToast('Champ requis', 'L\'email Gmail de récupération est obligatoire.', 'error');
+      return;
+    }
+    if (!pass || pass.length < 4) {
+      App.showToast('Mot de passe invalide', 'Le mot de passe doit comporter au moins 4 caractères.', 'error');
       return;
     }
 
@@ -219,16 +290,29 @@ const Users = (() => {
       departement: document.getElementById('af-departement').value.trim(),
       division:    document.getElementById('af-division').value.trim(),
       service:     document.getElementById('af-service').value.trim(),
-      province:    document.getElementById('af-province').value.trim()
+      province:    document.getElementById('af-province').value.trim(),
+      email:       email,
+      password:    pass,
+      role:        role
     };
 
     save(data);
+
+    // Si on a modifié la session actuelle, mettre à jour la session
+    if (typeof Auth !== 'undefined') {
+      const curUser = Auth.getCurrentUser();
+      if (curUser && curUser.id === data.id) {
+        localStorage.setItem('ordre_mission_current_session', JSON.stringify(data));
+        Auth.updateUIForSession();
+      }
+    }
+
     App.closeModal('agent-modal');
     renderList();
     populateDropdown(document.getElementById('active-agent-select'));
     // Also update history filter
     History.populateAgentFilter();
-    App.showToast('Agent enregistré', `${nom} a été enregistré.`, 'success');
+    App.showToast('Agent enregistré', `${nom} (MDP & Gmail sauvegardés).`, 'success');
   }
 
   /* ---- Confirm delete ---- */
@@ -319,6 +403,34 @@ const Users = (() => {
     }
   }
 
+  /* ---- Helpers pour affichage/masquage mot de passe ---- */
+
+  function togglePassVisibility(inputId) {
+    const el = document.getElementById(inputId);
+    const eye = document.getElementById('af-pass-eye');
+    if (!el) return;
+    if (el.type === 'password') {
+      el.type = 'text';
+      if (eye) eye.className = 'fa-solid fa-eye-slash';
+    } else {
+      el.type = 'password';
+      if (eye) eye.className = 'fa-solid fa-eye';
+    }
+  }
+
+  function toggleCardPass(userId, clearPass) {
+    const textEl = document.getElementById(`pass-text-${userId}`);
+    const eyeEl  = document.getElementById(`pass-eye-${userId}`);
+    if (!textEl) return;
+    if (textEl.textContent === '••••••••') {
+      textEl.textContent = clearPass;
+      if (eyeEl) eyeEl.className = 'fa-solid fa-eye-slash';
+    } else {
+      textEl.textContent = '••••••••';
+      if (eyeEl) eyeEl.className = 'fa-solid fa-eye';
+    }
+  }
+
   return {
     init,
     getAll,
@@ -333,6 +445,8 @@ const Users = (() => {
     openModal,
     saveFromForm,
     confirmDelete,
-    fillMissionForm
+    fillMissionForm,
+    togglePassVisibility,
+    toggleCardPass
   };
 })();

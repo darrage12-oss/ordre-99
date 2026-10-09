@@ -15,7 +15,7 @@
   <!-- Local FontAwesome -->
   <link rel="stylesheet" href="css/font-awesome.min.css" />
   <!-- App Stylesheet -->
-  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/style.css?v=20261009_pro2" />
 </head>
 <body>
 
@@ -481,32 +481,78 @@
   </div><!-- end #main-wrap -->
 
   <!-- =====================================================================
-       BARRE DE NAVIGATION MOBILE PROFESSIONNELLE (Format Téléphone Ergonomique)
+       BARRE DE NAVIGATION MOBILE PRO AVEC BOUTON CENTRAL FLOTTANT (FAB)
        ===================================================================== -->
   <nav id="mobile-bottom-nav" class="mobile-bottom-nav">
     <button type="button" class="mob-nav-btn active" data-view="dashboard">
       <i class="fa-solid fa-chart-column"></i>
       <span>Tableau</span>
     </button>
-    <button type="button" class="mob-nav-btn" data-view="create">
-      <i class="fa-solid fa-circle-plus"></i>
-      <span>Nouveau</span>
-    </button>
     <button type="button" class="mob-nav-btn" data-view="history">
       <i class="fa-solid fa-calendar-check"></i>
       <span>Historique</span>
     </button>
+
+    <!-- Bouton Créer flottant au centre (FAB) -->
+    <button type="button" class="mob-nav-fab" data-view="create" title="Créer un ordre de mission">
+      <div class="fab-circle">
+        <i class="fa-solid fa-plus"></i>
+      </div>
+      <span class="fab-text">Créer OM</span>
+    </button>
+
     <button type="button" class="mob-nav-btn" data-view="agents" id="mob-nav-agents-btn">
       <i class="fa-solid fa-user-circle"></i>
       <span id="mob-nav-agents-label">Mon Profil</span>
     </button>
-    <button type="button" class="mob-nav-btn btn-mob-logout" onclick="Auth.logout()" title="Déconnexion">
-      <i class="fa-solid fa-arrow-right-from-bracket"></i>
-      <span>Quitter</span>
+    <button type="button" class="mob-nav-btn" id="mob-nav-menu-btn" onclick="openMobileMenuSheet()">
+      <i class="fa-solid fa-bars-staggered"></i>
+      <span>Menu Pro</span>
     </button>
   </nav>
 
 </div><!-- end #app-shell -->
+
+<!-- =====================================================================
+     VOLET COULISSANT MOBILE "MENU PRO" (Bottom Sheet)
+     ===================================================================== -->
+<div id="mobile-menu-overlay" class="mobile-menu-overlay" onclick="closeMobileMenuSheet()"></div>
+<div id="mobile-menu-sheet" class="mobile-menu-sheet">
+  <div class="sheet-handle" onclick="closeMobileMenuSheet()"></div>
+  <div class="sheet-header">
+    <div class="sheet-user-avatar"><i class="fa-solid fa-user"></i></div>
+    <div class="sheet-user-info">
+      <div class="sheet-user-name" id="sheet-user-nom">Agent SRM</div>
+      <div class="sheet-user-mat" id="sheet-user-mat">Matricule : --</div>
+    </div>
+    <button type="button" class="sheet-close" onclick="closeMobileMenuSheet()"><i class="fa-solid fa-xmark"></i></button>
+  </div>
+  <div class="sheet-body">
+    <div class="sheet-menu-item" onclick="App.toggleDarkMode(); closeMobileMenuSheet();">
+      <i class="fa-solid fa-circle-half-stroke"></i>
+      <span>Mode Sombre / Clair</span>
+      <span class="sheet-badge">Basculer</span>
+    </div>
+    <div class="sheet-menu-item" onclick="if(typeof CloudSync !== 'undefined') CloudSync.openConfigModal(); closeMobileMenuSheet();">
+      <i class="fa-solid fa-cloud-arrow-up"></i>
+      <span>Synchronisation Téléphone ↔ PC</span>
+      <span class="sheet-badge online" id="sheet-cloud-status">En direct</span>
+    </div>
+    <div class="sheet-menu-item" onclick="App.openModal('io-modal'); closeMobileMenuSheet();">
+      <i class="fa-solid fa-file-arrow-down"></i>
+      <span>Sauvegarde / Restauration (JSON)</span>
+    </div>
+    <div class="sheet-menu-item sheet-item-refresh" onclick="forcePurgeAndRefresh()">
+      <i class="fa-solid fa-rotate-right"></i>
+      <span>Forcer la mise à jour (Vider Cache Mobile)</span>
+      <span class="sheet-badge">V2.2 Pro</span>
+    </div>
+    <div class="sheet-menu-item sheet-item-danger" onclick="Auth.logout()">
+      <i class="fa-solid fa-power-off"></i>
+      <span>Se déconnecter</span>
+    </div>
+  </div>
+</div>
 
 <!-- =====================================================================
      MODALS
@@ -723,20 +769,20 @@
 <div id="toast-container"></div>
 
 <!-- =====================================================================
-     SCRIPTS (order matters)
+     SCRIPTS (order matters - versioned to guarantee instant phone update)
      ===================================================================== -->
-<script src="js/logo_data.js"></script>
+<script src="js/logo_data.js?v=20261009_pro2"></script>
 <script src="js/html2pdf.bundle.min.js"></script>
-<script src="js/demo_data.js"></script>
-<script src="js/users.js"></script>
-<script src="js/auth.js"></script>
-<script src="js/missions.js"></script>
-<script src="js/history.js"></script>
-<script src="js/dashboard.js"></script>
-<script src="js/pdf.js"></script>
-<script src="js/app.js"></script>
+<script src="js/demo_data.js?v=20261009_pro2"></script>
+<script src="js/users.js?v=20261009_pro2"></script>
+<script src="js/auth.js?v=20261009_pro2"></script>
+<script src="js/missions.js?v=20261009_pro2"></script>
+<script src="js/history.js?v=20261009_pro2"></script>
+<script src="js/dashboard.js?v=20261009_pro2"></script>
+<script src="js/pdf.js?v=20261009_pro2"></script>
+<script src="js/app.js?v=20261009_pro2"></script>
 <script src="js/paho-mqtt.min.js"></script>
-<script src="js/cloud_sync.js"></script>
+<script src="js/cloud_sync.js?v=20261009_pro2"></script>
 
 <!-- Initialisation automatique de la date actuelle, horaires par défaut, Auth et CloudSync -->
 <script>
@@ -765,6 +811,42 @@
     }
   }
 
+  // Fonctions pour le volet coulissant "Menu Pro" sur smartphone
+  window.openMobileMenuSheet = function() {
+    const sheet = document.getElementById('mobile-menu-sheet');
+    const overlay = document.getElementById('mobile-menu-overlay');
+    if (sheet && overlay) {
+      const u = typeof Auth !== 'undefined' ? Auth.getCurrentUser() : null;
+      const nomEl = document.getElementById('sheet-user-nom');
+      const matEl = document.getElementById('sheet-user-mat');
+      if (u) {
+        if (nomEl) nomEl.textContent = u.nom || 'Agent';
+        if (matEl) matEl.textContent = 'Matricule : ' + (u.matricule || '–');
+      }
+      sheet.classList.add('open');
+      overlay.classList.add('open');
+    }
+  };
+
+  window.closeMobileMenuSheet = function() {
+    const sheet = document.getElementById('mobile-menu-sheet');
+    const overlay = document.getElementById('mobile-menu-overlay');
+    if (sheet) sheet.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+  };
+
+  window.forcePurgeAndRefresh = function() {
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        return Promise.all(names.map(name => caches.delete(name)));
+      }).then(() => {
+        window.location.reload(true);
+      });
+    } else {
+      window.location.reload(true);
+    }
+  };
+
   // Au chargement initial
   document.addEventListener('DOMContentLoaded', () => {
     setDefaultDatesAndTimes();
@@ -775,8 +857,9 @@
       CloudSync.init();
     }
 
-    // Gestion de la barre de navigation mobile tactile
+    // Gestion de la barre de navigation mobile tactile & bouton FAB central
     document.addEventListener('click', (e) => {
+      // Boutons réguliers
       const mobBtn = e.target.closest('.mob-nav-btn[data-view]');
       if (mobBtn && typeof App !== 'undefined') {
         const view = mobBtn.dataset.view;
@@ -784,14 +867,27 @@
         document.querySelectorAll('.mob-nav-btn[data-view]').forEach(b => {
           b.classList.toggle('active', b.dataset.view === view);
         });
+        document.querySelectorAll('.mob-nav-fab[data-view]').forEach(b => b.classList.remove('active'));
       }
-      // Si la vue change depuis la sidebar, synchroniser la barre mobile
+
+      // Bouton central flottant Créer (FAB)
+      const fabBtn = e.target.closest('.mob-nav-fab[data-view]');
+      if (fabBtn && typeof App !== 'undefined') {
+        const view = fabBtn.dataset.view;
+        App.switchView(view);
+        document.querySelectorAll('.mob-nav-btn[data-view]').forEach(b => b.classList.remove('active'));
+        fabBtn.classList.add('active');
+      }
+
+      // Synchronisation depuis la sidebar
       const sideBtn = e.target.closest('.nav-item[data-view]');
       if (sideBtn) {
         const view = sideBtn.dataset.view;
         document.querySelectorAll('.mob-nav-btn[data-view]').forEach(b => {
           b.classList.toggle('active', b.dataset.view === view);
         });
+        const fab = document.querySelector('.mob-nav-fab[data-view]');
+        if (fab) fab.classList.toggle('active', fab.dataset.view === view);
       }
     });
 

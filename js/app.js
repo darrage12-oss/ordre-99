@@ -30,9 +30,24 @@ const App = (() => {
       a.classList.toggle('active', a.dataset.view === viewName);
     });
 
-    // Update topbar title
+    // Update mobile bottom navigation active state
+    document.querySelectorAll('.mob-nav-btn[data-view]').forEach(b => {
+      b.classList.toggle('active', b.dataset.view === viewName);
+    });
+    const mobFab = document.querySelector('.mob-nav-fab[data-view]');
+    if (mobFab) {
+      mobFab.classList.toggle('active', mobFab.dataset.view === viewName);
+    }
+
+    // Update topbar title (respect "Mon Profil" for non-admin users)
     const titleEl = document.getElementById('topbar-title');
-    if (titleEl) titleEl.textContent = VIEW_TITLES[viewName] || '';
+    if (titleEl) {
+      if (viewName === 'agents' && typeof Auth !== 'undefined' && !Auth.isAdmin()) {
+        titleEl.textContent = 'Mon Profil';
+      } else {
+        titleEl.textContent = VIEW_TITLES[viewName] || '';
+      }
+    }
 
     // Per-view refresh
     if (viewName === 'dashboard') {
@@ -46,8 +61,10 @@ const App = (() => {
       Users.renderList();
     }
 
-    // Close mobile sidebar
+    // Close mobile sidebar & menu sheet, scroll to top
     closeMobileSidebar();
+    if (typeof closeMobileMenuSheet === 'function') closeMobileMenuSheet();
+    window.scrollTo(0, 0);
   }
 
   /* ---- Sidebar (mobile) ---- */

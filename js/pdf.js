@@ -469,6 +469,24 @@ const PDF = (() => {
     `;
   }
 
+  /* ---- Mise à l'échelle automatique de l'aperçu A4 sur téléphone ---- */
+  function _fitPreviewToScreen() {
+    const page = document.getElementById('om-page');
+    if (!page) return;
+    if (window.innerWidth <= 820) {
+      const docW = 794; // 210mm @ 96dpi
+      const availW = Math.max(280, window.innerWidth - 20);
+      const scale = Math.min(1, availW / docW);
+      page.style.transform = `scale(${scale})`;
+      page.style.transformOrigin = 'top center';
+      page.style.marginBottom = `-${Math.round(1123 * (1 - scale))}px`;
+    } else {
+      page.style.transform = '';
+      page.style.transformOrigin = '';
+      page.style.marginBottom = '';
+    }
+  }
+
   /* ---- Prévisualisation dans la modale ---- */
   function showPreview(missionData) {
     _currentMission = missionData;
@@ -485,6 +503,7 @@ const PDF = (() => {
     if (typeof App !== 'undefined' && App.openModal) {
       App.openModal('preview-modal');
     }
+    requestAnimationFrame(_fitPreviewToScreen);
   }
 
   function showPreviewById(id) {
@@ -627,6 +646,13 @@ const PDF = (() => {
     if (pdfBtn) {
       pdfBtn.addEventListener('click', exportPDF);
     }
+
+    window.addEventListener('resize', () => {
+      const modal = document.getElementById('preview-modal');
+      if (modal && modal.classList.contains('open')) {
+        _fitPreviewToScreen();
+      }
+    });
   }
 
   return {

@@ -100,14 +100,22 @@ const Users = (() => {
     const users = getAll();
     const activeId = getActiveUserId();
 
-    selectEl.innerHTML = '<option value="">— Choisir par Matricule —</option>';
-    users.forEach(u => {
-      const opt = document.createElement('option');
-      opt.value = u.id;
-      // Affichage du Matricule uniquement comme identifiant principal
-      opt.textContent = u.matricule || u.nom;
-      if (u.id === activeId) opt.selected = true;
-      selectEl.appendChild(opt);
+    const targets = [selectEl];
+    if (selectEl.id === 'active-agent-select') {
+      const mobileCreateSel = document.getElementById('create-agent-select');
+      if (mobileCreateSel) targets.push(mobileCreateSel);
+    }
+
+    targets.forEach(sel => {
+      sel.innerHTML = '<option value="">— Choisir par Matricule —</option>';
+      users.forEach(u => {
+        const opt = document.createElement('option');
+        opt.value = u.id;
+        // Affichage du Matricule uniquement comme identifiant principal
+        opt.textContent = u.matricule || u.nom;
+        if (u.id === activeId) opt.selected = true;
+        sel.appendChild(opt);
+      });
     });
   }
 
@@ -142,8 +150,8 @@ const Users = (() => {
       <div class="agent-card">
         <div class="agent-card-header">
           <div class="agent-avatar">${_initials(u.nom)}</div>
-          <div class="agent-matricule" style="font-size:1.15rem;font-weight:700;color:var(--primary);letter-spacing:0.5px;margin-bottom:2px">Matricule : ${_esc(u.matricule || '–')}</div>
-          <div class="agent-name" style="font-size:0.92rem;color:var(--text-muted)">${_esc(u.nom)}</div>
+          <div class="agent-matricule" style="font-size:1.1rem;font-weight:700;color:#ffffff;letter-spacing:0.5px;margin-bottom:2px">Matricule : ${_esc(u.matricule || '–')}</div>
+          <div class="agent-name" style="font-size:0.92rem;color:rgba(255,255,255,0.9)">${_esc(u.nom)}</div>
         </div>
         <div class="agent-card-body">
           <div class="agent-info-row">
@@ -391,15 +399,21 @@ const Users = (() => {
     const saveBtn = document.getElementById('btn-save-agent');
     if (saveBtn) saveBtn.addEventListener('click', saveFromForm);
 
-    // Active agent select change
+    // Active agent select change (Desktop Topbar & Mobile Admin Picker)
     const sel = document.getElementById('active-agent-select');
+    const createSel = document.getElementById('create-agent-select');
+    const handleAgentSwitch = (val, sourceSel) => {
+      setActiveUser(val);
+      if (sel && sourceSel !== sel) sel.value = val;
+      if (createSel && sourceSel !== createSel) createSel.value = val;
+      Users.fillMissionForm();
+      Missions.refreshFormHeader();
+    };
     if (sel) {
-      sel.addEventListener('change', function() {
-        setActiveUser(this.value);
-        Users.fillMissionForm();
-        // Refresh form numero if on create view
-        Missions.refreshFormHeader();
-      });
+      sel.addEventListener('change', function() { handleAgentSwitch(this.value, sel); });
+    }
+    if (createSel) {
+      createSel.addEventListener('change', function() { handleAgentSwitch(this.value, createSel); });
     }
   }
 

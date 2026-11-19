@@ -60,41 +60,54 @@ const Dashboard = (() => {
 
   /* ---- Bar Chart: Missions per month (last 12 months) ---- */
 
+  function _getCanvasWidth(canvas, fallback) {
+    const parent = canvas.parentElement;
+    if (!parent) return fallback;
+    const cs = window.getComputedStyle(parent);
+    const padX = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+    const inner = Math.floor(parent.clientWidth - padX);
+    return Math.max(220, inner || fallback);
+  }
+
   function drawBarChart() {
     const canvas = document.getElementById('chart-monthly');
     if (!canvas) return;
 
-    const ctx  = canvas.getContext('2d');
-    const now  = new Date();
+    const ctx    = canvas.getContext('2d');
+    const now    = new Date();
+    const dpr    = window.devicePixelRatio || 1;
+    const W      = _getCanvasWidth(canvas, 320);
+    const isNarrow = W < 440;
+    const H      = isNarrow ? 195 : 220;
+
     const labels = [];
     const data   = [];
 
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      labels.push(MONTH_NAMES_SHORT[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2));
+      labels.push(isNarrow ? MONTH_NAMES_SHORT[d.getMonth()] : MONTH_NAMES_SHORT[d.getMonth()] + ' ' + String(d.getFullYear()).slice(2));
       const count = (typeof Missions.getVisibleByMonth === 'function')
         ? Missions.getVisibleByMonth(d.getFullYear(), d.getMonth()).length
         : Missions.getByMonth(d.getFullYear(), d.getMonth()).length;
       data.push(count);
     }
 
-    // Determine DPR for sharp rendering
-    const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.parentElement.getBoundingClientRect();
-    const W    = rect.width  || 500;
-    const H    = 220;
-
     canvas.width  = W * dpr;
     canvas.height = H * dpr;
     canvas.style.width  = W + 'px';
+    canvas.style.maxWidth = '100%';
     canvas.style.height = H + 'px';
+    canvas.style.display = 'block';
     ctx.scale(dpr, dpr);
 
-    _drawBars(ctx, W, H, labels, data, '#2980b9', '#e67e22');
+    _drawBars(ctx, W, H, labels, data, '#2980b9', '#e67e22', isNarrow);
   }
 
-  function _drawBars(ctx, W, H, labels, data, barColor, accentColor) {
-    const PAD_L = 36, PAD_R = 12, PAD_T = 20, PAD_B = 38;
+  function _drawBars(ctx, W, H, labels, data, barColor, accentColor, isNarrow) {
+    const PAD_L  = isNarrow ? 24 : 36;
+    const PAD_R  = isNarrow ? 6  : 12;
+    const PAD_T  = isNarrow ? 18 : 20;
+    const PAD_B  = isNarrow ? 26 : 38;
     const chartW = W - PAD_L - PAD_R;
     const chartH = H - PAD_T - PAD_B;
     const maxVal = Math.max(...data, 1);
@@ -103,7 +116,6 @@ const Dashboard = (() => {
     const isDark = document.body.classList.contains('dark-mode');
     const gridColor = isDark ? '#253650' : '#e9ecef';
     const textColor = isDark ? '#8097b0' : '#7f8c8d';
-    const bgCard    = isDark ? '#1a2535' : '#fff';
 
     ctx.clearRect(0, 0, W, H);
 
@@ -127,11 +139,11 @@ const Dashboard = (() => {
     }
 
     // Bars
-    const barW    = (chartW / labels.length) * 0.55;
-    const barGap  = chartW / labels.length;
+    const barGap = chartW / labels.length;
+    const barW   = Math.max(8, barGap * 0.55);
 
     data.forEach((val, i) => {
-      const x = PAD_L + i * barGap + (barGap - barW) / 2;
+      const x    = PAD_L + i * barGap + (barGap - barW) / 2;
       const barH = (val / maxVal) * chartH;
       const y    = PAD_T + chartH - barH;
 
@@ -142,20 +154,20 @@ const Dashboard = (() => {
 
       ctx.fillStyle = grad;
       ctx.beginPath();
-      _roundRect(ctx, x, y, barW, barH, 4);
+      _roundRect(ctx, x, y, barW, barH, Math.min(4, barW / 2));
       ctx.fill();
 
       // Value label on top of bar
       if (val > 0) {
         ctx.fillStyle = isDark ? '#dce8f5' : '#1c2833';
-        ctx.font = 'bold 10px system-ui';
+        ctx.font = isNarrow ? 'bold 9.5px system-ui' : 'bold 10px system-ui';
         ctx.textAlign = 'center';
         ctx.fillText(val, x + barW / 2, y - 4);
       }
 
       // X label
       ctx.fillStyle = textColor;
-      ctx.font = '9.5px system-ui';
+      ctx.font = isNarrow ? '8.5px system-ui' : '9.5px system-ui';
       ctx.textAlign = 'center';
       ctx.fillText(labels[i], x + barW / 2, PAD_T + chartH + 14);
     });
@@ -222,15 +234,17 @@ const Dashboard = (() => {
       })).sort((a, b) => b.count - a.count).slice(0, 5);
     }
 
-    const dpr  = window.devicePixelRatio || 1;
-    const rect = canvas.parentElement.getBoundingClientRect();
-    const W    = rect.width || 260;
-    const H    = 220;
+    const dpr      = window.devicePixelRatio || 1;
+    const W        = _getCanvasWidth(canvas, 280);
+    const isNarrow = W < 420;
+    const H        = isNarrow ? 195 : 220;
 
     canvas.width  = W * dpr;
     canvas.height = H * dpr;
     canvas.style.width  = W + 'px';
+    canvas.style.maxWidth = '100%';
     canvas.style.height = H + 'px';
+    canvas.style.display = 'block';
     ctx.scale(dpr, dpr);
 
     const isDark    = document.body.classList.contains('dark-mode');
@@ -248,8 +262,11 @@ const Dashboard = (() => {
     }
 
     const maxVal  = Math.max(...entries.map(e => e.count), 1);
-    const PAD_L   = 85, PAD_R = 36, PAD_T = 14, PAD_B = 14;
-    const chartW  = W - PAD_L - PAD_R;
+    const PAD_L   = isNarrow ? 74 : 85;
+    const PAD_R   = isNarrow ? 26 : 36;
+    const PAD_T   = 12;
+    const PAD_B   = 12;
+    const chartW  = Math.max(80, W - PAD_L - PAD_R);
     const rowH    = (H - PAD_T - PAD_B) / entries.length;
     const barH    = rowH * 0.48;
 
@@ -263,7 +280,7 @@ const Dashboard = (() => {
       ctx.fillStyle = isDark ? '#dce8f5' : '#1c2833';
       ctx.font = '10px system-ui';
       ctx.textAlign = 'right';
-      ctx.fillText(_truncate(e.label, 13), PAD_L - 6, y + barH / 2 + 4);
+      ctx.fillText(_truncate(e.label, isNarrow ? 11 : 13), PAD_L - 6, y + barH / 2 + 4);
 
       // Grid line
       ctx.strokeStyle = gridColor;
@@ -309,7 +326,7 @@ const Dashboard = (() => {
     ctx.closePath();
   }
 
-  /* ---- Recent missions table ---- */
+  /* ---- Recent missions table (PC) + Mobile Cards ---- */
 
   function renderRecentMissions() {
     const container = document.getElementById('dash-recent-missions');
@@ -343,7 +360,7 @@ const Dashboard = (() => {
     }
 
     container.innerHTML = `
-      <table class="data-table">
+      <table class="data-table desktop-only-table">
         <thead>
           <tr>
             <th>N° OM</th>
@@ -374,7 +391,29 @@ const Dashboard = (() => {
             </td>
           </tr>`).join('')}
         </tbody>
-      </table>`;
+      </table>
+      <div class="mobile-recent-list">
+        ${missions.map(m => `
+        <div class="mobile-recent-card">
+          <div class="mrc-top">
+            <span class="mrc-num">${_esc(m.numero || '–')}</span>
+            ${transport(m)}
+          </div>
+          <div class="mrc-row"><i class="fa-solid fa-user"></i> <strong>${_esc((m.agent && m.agent.nom) || '–')}</strong></div>
+          <div class="mrc-meta">
+            <span><i class="fa-solid fa-location-dot"></i> ${_esc(m.lieuDeplacement || '–')}</span>
+            <span><i class="fa-solid fa-calendar-days"></i> ${fmtDate(m.dateDepart)} → ${fmtDate(m.dateRetour)}</span>
+          </div>
+          <div class="mrc-actions">
+            <button type="button" class="btn btn-outline btn-sm" onclick="PDF.showPreviewById('${m.id}')">
+              <i class="fa-solid fa-eye"></i> Aperçu
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="PDF.exportPDFById('${m.id}')">
+              <i class="fa-solid fa-file-pdf"></i> PDF
+            </button>
+          </div>
+        </div>`).join('')}
+      </div>`;
   }
 
   function _esc(str) {

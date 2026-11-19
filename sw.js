@@ -5,14 +5,13 @@
  * - Hors-ligne : repli sur le cache
  * - Les requÃªtes externes (synchronisation Cloud) ne sont jamais interceptÃ©es
  */
-const CACHE_NAME = 'ordre-mission-v30-pro';
+const CACHE_NAME = 'ordre-mission-v40-mobile-pro';
 
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
   './manifest.json',
   './css/style.css',
-  './css/font-awesome.min.css',
   './assets/logo.png',
   './assets/icons/icon-192.png',
   './assets/icons/icon-512.png',
@@ -66,7 +65,24 @@ self.addEventListener('fetch', event => {
 
   const url = new URL(req.url);
 
-  // Ignorer les requÃªtes externes (ntfy.sh, CDN, Firebase...) et les flux SSE
+  // Cache-first pour les icônes FontAwesome CDN (fonctionne hors-ligne après 1er chargement)
+  if (url.origin === 'https://cdnjs.cloudflare.com') {
+    event.respondWith(
+      caches.match(req).then(cached => {
+        if (cached) return cached;
+        return fetch(req).then(response => {
+          if (response && response.ok) {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then(cache => cache.put(req, copy));
+          }
+          return response;
+        });
+      })
+    );
+    return;
+  }
+
+  // Ignorer les autres requêtes externes (ntfy.sh, MQTT, Firebase...) et les flux SSE
   if (url.origin !== self.location.origin) return;
   if (req.headers.get('accept') === 'text/event-stream') return;
 

@@ -152,6 +152,7 @@ const Auth = (() => {
 
   /* ---- Déconnexion ---- */
   function logout() {
+    if (typeof closeMobileMenuSheet === 'function') closeMobileMenuSheet();
     localStorage.removeItem(SESSION_KEY);
     localStorage.removeItem('ordre_mission_active_user');
 
@@ -274,13 +275,18 @@ const Auth = (() => {
     }
 
     // Afficher le badge de session personnalisé
+    document.body.classList.toggle('is-admin-session', isAdmin());
     if (sessionWrap) {
       sessionWrap.style.display = 'inline-flex';
       const matEl = document.getElementById('session-user-matricule');
       const nameEl = document.getElementById('session-user-name');
       const roleEl = document.getElementById('session-user-role');
 
-      if (matEl) matEl.textContent = user.matricule || '–';
+      const hideDuplicateAdminMat = isAdmin() && compactMatricule(user.matricule) === 'ADMIN';
+      if (matEl) {
+        matEl.textContent = user.matricule || '–';
+        matEl.style.display = hideDuplicateAdminMat ? 'none' : '';
+      }
       if (nameEl) nameEl.textContent = user.nom ? `(${user.nom})` : '';
       if (roleEl) {
         if (isAdmin()) {
@@ -306,17 +312,21 @@ const Auth = (() => {
       }
     }
 
-    // Libellé de l'onglet dans la barre mobile inférieure
+    // Libellé et icône de l'onglet dans la barre mobile inférieure
     const mobAgentLabel = document.getElementById('mob-nav-agents-label');
     if (mobAgentLabel) {
-      mobAgentLabel.textContent = isAdmin() ? 'Agents' : 'Mon Profil';
+      mobAgentLabel.textContent = isAdmin() ? 'Agents' : 'Profil';
+    }
+    const mobAgentIcon = document.querySelector('#mob-nav-agents-btn i');
+    if (mobAgentIcon) {
+      mobAgentIcon.className = isAdmin() ? 'fa-solid fa-users' : 'fa-solid fa-user';
     }
 
     // Titre de la vue agents
     const agentViewTitle = document.querySelector('#view-agents .view-header h2');
     if (agentViewTitle) {
       agentViewTitle.innerHTML = isAdmin()
-        ? '<i class="fa-solid fa-users-cog"></i> Gestion des Agents & Accès Sécurité'
+        ? '<i class="fa-solid fa-users-cog"></i> Gestion des Agents'
         : '<i class="fa-solid fa-user-circle"></i> Mon Profil Personnel';
     }
 

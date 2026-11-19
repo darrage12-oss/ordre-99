@@ -115,7 +115,7 @@ const History = (() => {
       <div class="mission-card">
         <div class="mission-card-header">
           <span class="mc-num">${_esc(m.numero || '–')}</span>
-          <span class="mc-agent" style="font-weight:700;color:var(--primary)"><i class="fa-solid fa-id-card"></i> ${_esc(agent.matricule || agent.nom || '–')}</span>
+          <span class="mc-agent" style="font-weight:700;color:#ffffff;"><i class="fa-solid fa-id-card"></i> ${_esc(agent.matricule || agent.nom || '–')}</span>
         </div>
         <div class="mission-card-body">
           <div class="mc-row">
@@ -131,7 +131,7 @@ const History = (() => {
           <div class="mc-row">
             <i class="fa-solid fa-align-left"></i>
             <span class="mc-label">Motif :</span>
-            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${_esc(m.motifDeplacement)}">${_esc(m.motifDeplacement)}</span>
+            <span class="mc-motif-text" title="${_esc(m.motifDeplacement)}">${_esc(m.motifDeplacement)}</span>
           </div>
           <div class="mc-row">
             <i class="fa-solid fa-calendar-days"></i>
@@ -146,7 +146,7 @@ const History = (() => {
         </div>
         <div class="mission-card-actions">
           <button class="btn btn-outline btn-xs" onclick="PDF.showPreviewById('${m.id}')" title="Aperçu">
-            <i class="fa-solid fa-eye"></i>
+            <i class="fa-solid fa-eye"></i> Voir
           </button>
           <button class="btn btn-primary btn-xs" onclick="PDF.exportPDFById('${m.id}')" title="Exporter PDF">
             <i class="fa-solid fa-file-pdf"></i> PDF
@@ -155,7 +155,7 @@ const History = (() => {
             <i class="fa-solid fa-pen"></i> Modifier
           </button>
           <button class="btn btn-danger btn-xs" onclick="Missions.confirmDelete('${m.id}')" title="Supprimer">
-            <i class="fa-solid fa-trash-can"></i>
+            <i class="fa-solid fa-trash-can"></i> Suppr.
           </button>
         </div>
       </div>`;

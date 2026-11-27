@@ -30,8 +30,9 @@ const PDF = (() => {
   }
 
   function _formatTime(timeStr, defaultTime) {
-    const val = timeStr || defaultTime;
-    return String(val).replace(':', 'h');
+    const raw = String(timeStr || '').trim();
+    const val = raw || (defaultTime || '');
+    return val ? val.replace(':', 'h') : '';
   }
 
   function _esc(str) {
@@ -142,9 +143,9 @@ const PDF = (() => {
     const dateRetour = _formatDate(dateRetourVal);
     const dateCreation = _formatDate(dateCreationVal);
 
-    // Heures par défaut : 08h00 à 16h30
+    // Heure de départ par défaut : 08h00 ; Heure de retour optionnelle (vide si non renseignée)
     const heureDepart = _formatTime(m.heureDepart, '08:00');
-    const heureRetour = _formatTime(m.heureRetour, '16:30');
+    const heureRetour = _formatTime(m.heureRetour, '');
 
     const lieuCreation = _esc(m.lieuCreation || agent.province || 'OUEZZANE');
 

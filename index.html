@@ -313,8 +313,13 @@
                     <input type="date" id="f-date-retour" class="form-control" required />
                   </div>
                   <div class="form-group">
-                    <label class="form-label">Heure</label>
-                    <input type="time" id="f-heure-retour" class="form-control" value="16:30" />
+                    <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+                      <label class="form-label" for="f-heure-retour" style="margin:0;">Heure</label>
+                      <button type="button" id="btn-clear-heure-retour" title="Laisser l'heure de retour vide" onclick="const el=document.getElementById('f-heure-retour');if(el){el.value='';el.dispatchEvent(new Event('change'));}" style="background:none;border:none;color:var(--text-muted);font-size:0.72rem;font-weight:600;cursor:pointer;padding:0 2px;display:inline-flex;align-items:center;gap:3px;">
+                        <i class="fa-solid fa-xmark"></i> Vide
+                      </button>
+                    </div>
+                    <input type="time" id="f-heure-retour" class="form-control" />
                   </div>
                 </div>
               </div>
@@ -786,7 +791,7 @@
 <script src="js/missions.js?v=20261119_mpro"></script>
 <script src="js/history.js?v=20261119_mpro"></script>
 <script src="js/dashboard.js?v=20261119_mpro"></script>
-<script src="js/pdf.js?v=20261119_mpro"></script>
+<script src="js/pdf.js?v=20261127_hret"></script>
 <script src="js/app.js?v=20261119_mpro"></script>
 <script src="js/paho-mqtt.min.js"></script>
 <script src="js/cloud_sync.js?v=20261119_mpro"></script>
@@ -804,13 +809,11 @@
     const dDep = document.getElementById('f-date-depart');
     const dRet = document.getElementById('f-date-retour');
     const hDep = document.getElementById('f-heure-depart');
-    const hRet = document.getElementById('f-heure-retour');
     const dCreation = document.getElementById('f-date-creation');
 
     if (dDep && !dDep.value) dDep.value = today;
     if (dRet && !dRet.value) dRet.value = today;
     if (hDep && !hDep.value) hDep.value = '08:00';
-    if (hRet && !hRet.value) hRet.value = '16:30';
 
     // "Fait le" prend automatiquement la date de départ
     if (dCreation && !dCreation.value) {

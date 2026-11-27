@@ -5,7 +5,7 @@
  * - Hors-ligne : repli sur le cache
  * - Les requÃªtes externes (synchronisation Cloud) ne sont jamais interceptÃ©es
  */
-const CACHE_NAME = 'ordre-mission-v40-mobile-pro';
+const CACHE_NAME = 'ordre-mission-v41-hret';
 
 const ASSETS_TO_CACHE = [
   './',
